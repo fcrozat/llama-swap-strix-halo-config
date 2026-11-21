@@ -133,7 +133,11 @@ models:
   # read from SSD and never resident.
   gufo-ds41:
     name: DeepSeek V4.1 Flash IQ1_M (gufo, dspark, streamed experts)
+    # useModelName goes upstream; aliases are the names clients may use
+    # (includeAliasesInList advertises them in /v1/models)
     useModelName: DeepSeek V4.1 Flash
+    aliases:
+      - DeepSeek V4.1 Flash
     cmd: |
       ${gufo_ds41_run}
       --model ${ds41_dir}/${ds41_q}-00001-of-00006.gguf
