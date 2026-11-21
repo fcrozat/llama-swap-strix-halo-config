@@ -1,0 +1,17 @@
+# llama-swap binary plus the pinned copies kept for rollback (v265 .. v271):
+# ~46 MB each, per-release downloads or build output. run-llama-swap.sh takes
+# LLAMA_SWAP=/path/to/llama-swap when it lives elsewhere.
+/llama-swap
+/llama-swap.v*
+
+# release archives unpacked into the copies above
+/*.tar.gz
+
+# upstream llama-swap changelog package (Go source + the v*.md notes it embeds):
+# vendored, and nothing here builds it - no go.mod, no importer
+/changelog/
+
+# runtime droppings
+*.log
+*.pid
+*.sock

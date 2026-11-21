@@ -1,0 +1,276 @@
+# llama-swap configuration for the strix box (AMD Strix Halo / gfx1151, unified CPU/GPU memory)
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mostlygeek/llama-swap/refs/heads/main/config-schema.json
+#
+# Model files live in /var/lib/models on the host and in /run/host/var/lib/models
+# inside a distrobox. Instead of two configs, make the host path exist inside the
+# distrobox once:
+#
+#   sudo ln -sfn /run/host/var/lib/models /var/lib/models
+#
+# Every path below - including the volumes handed to podman - is /var/lib/models,
+# so this file runs unchanged in both places.
+#
+# Each model is its own `llama-server` container (no router mode): llama-swap
+# starts one per request and stops it when another model is loaded. Flags follow
+# ~/strix/launchers/run-strix-llama.sh + /var/lib/models/llama/strix-models.ini,
+# inlined here because that pairing needs the router.
+#
+# Start it with ~/strix/launchers/run-llama-swap.sh (UI http://localhost:9931/ui/).
+#
+# gufo is a model here too, so its quadlet unit must not run at the same time:
+# it would load the same 125 GB weights on top of llama-swap's container. It is
+# rootful (/etc/containers/systemd/gufo.container), so on the host:
+#
+#   sudo systemctl disable --now gufo
+#
+# Running: ~/.config/systemd/user/llama-swap.service (rootless, as $USER, :8080 -
+# that is the unit that replaces the gufo quadlet). SELinux is enforcing here:
+# /var/lib/models/** is already container_file_t and root-owned, so model volumes
+# are plain :ro and never relabelled - ':Z' stamps an exclusive MCS category on
+# data several engines share and locks the other containers out. Cache dirs, which
+# the account owns, get ':z' (shared label).
+
+healthCheckTimeout: 900    # 27B-87B GGUFs are tens of GB, loading takes minutes
+logLevel: info
+logToStdout: "proxy"
+globalTTL: 0               # keep a model resident; set e.g. 900 to free memory when idle
+startPort: 10001
+includeAliasesInList: true   # so the short "gufo" alias shows up in /v1/models
+models_dir: /var/lib/models
+
+macros:
+  image: docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-10.0-strix-llama
+  dir: /var/lib/models/llama
+  gufo_image: ghcr.io/gufo-org/toolboxes/gufo-runtime:latest
+  gufo_cache: /var/cache/gufo      # run-llama-swap.sh points this at the host's in a distrobox
+
+  # podman + llama-server boilerplate shared by every model. Ordered so the
+  # per-model flags appended after ${run} win (macros may only use earlier ones).
+  run: >
+    podman run --rm --replace --name ls-${MODEL_ID}
+    --device /dev/dri --device /dev/kfd
+    --group-add video --group-add render
+    --security-opt seccomp=unconfined
+    --ulimit memlock=-1:-1
+    --volume ${dir}:/models:ro
+    --publish 127.0.0.1:${PORT}:9941
+    ${image}
+    llama-server
+    --host 0.0.0.0 --port 9941
+    --alias ${MODEL_ID}
+    -dev ROCm0 -ngl 999
+    --spec-draft-device ROCm0 --spec-draft-ngl 99
+    --ctx-size 131072
+    --load-mode dio
+    --lazy-mode on-direct
+    --kv-unified
+    --cache-type-k f16 --cache-type-v f16
+    --flash-attn on
+    --fit off
+    --batch-size 16384
+    --jinja
+
+  # MoE models here: MTP head is inside the main GGUF, so draft-mtp with no
+  # --spec-draft-model, plus KV shifting to survive shared slots.
+  moe: >
+    --spec-type draft-mtp
+    --spec-draft-n-max 3
+    --cache-reuse 256
+    --cont-batching
+    --ubatch-size 4096
+
+  # gufo runtime boilerplate + the serve flags shared by every model in
+  # /etc/containers/systemd/gufo.container; each gufo model below appends its own
+  # --model / --speculative / --mmproj. The container keeps port 8080 internally
+  # and llama-swap reaches it on ${PORT}; quadlet Pull=always is left out so a
+  # swap does not wait on the registry.
+  gufo_run: >
+    podman run --rm --replace --name ls-${MODEL_ID}
+    --device /dev/dri --device /dev/kfd
+    --group-add keep-groups
+    --ulimit memlock=-1
+    --userns keep-id:uid=1000,gid=1000
+    --volume ${dir}:/models:ro
+    --volume ${gufo_cache}:/gufo_cache:rw,z
+    --publish 127.0.0.1:${PORT}:8080
+    ${gufo_image}
+    gufo serve --host 0.0.0.0 --port 8080 llm
+    --draft-tokens 7 --sessions 4 --max-pending-per-client 4
+    --max-tokens 32768 --context 131072
+    --cache-disk /gufo_cache
+    --reasoning-effort xhigh --preserve-thinking on
+
+  hipfire_image: localhost/hipfire:latest        # built from ~/strix/hipfire/Containerfile
+  hipfire_dir: /var/lib/models/hipfire
+  hipfire_cache: ${env.HOME}/hipfire-kcache      # JIT kernel cache; home is shared, same dir either way
+
+  # hipfire boilerplate; each model below appends `serve <tag> 0.0.0.0:11435`.
+  # Published on loopback only (docs/CONTAINER.md: no TLS, no key) while the
+  # in-container bind stays 0.0.0.0 so the port publish DNAT reaches it.
+  # run-hipfire.sh's `chcon -R` is not repeated - the model tree is already
+  # container_file_t - and serve's own idle unload (300s) is left alone: a request
+  # after it reloads the model, slowly but correctly.
+  hipfire_run: >
+    podman run --rm --replace --name ls-${MODEL_ID}
+    --device /dev/dri --device /dev/kfd --device /dev/accel/accel0
+    --group-add keep-groups
+    --security-opt seccomp=unconfined
+    --ulimit memlock=-1:-1
+    --env HIPFIRE_QWEN4_NPU_TRUNK=auto
+    --volume ${hipfire_dir}:/root/.hipfire/models:ro
+    --volume ${hipfire_cache}:/var/cache/hipfire:z
+    --publish 127.0.0.1:${PORT}:11435
+    ${hipfire_image}
+
+models:
+  "qwen3.8-27b":
+    cmd: >
+      ${run}
+      --model /models/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf
+      --spec-type draft-mtp
+      --spec-draft-model /models/Qwen3.8-27B-GGUF/MTP/mtp-Qwen3.8-27B-Q4_0.gguf
+      --parallel 1
+      --ubatch-size 16384
+    cmdStop: podman stop ls-${MODEL_ID}
+    name: "Qwen3.8 27B Q4_K_XL + MTP"
+
+  "qwen3.8-27b-q8":
+    cmd: >
+      ${run}
+      --model /models/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q8_K_XL.gguf
+      --spec-type draft-mtp
+      --spec-draft-model /models/Qwen3.8-27B-GGUF/MTP/mtp-Qwen3.8-27B-Q4_0.gguf
+      --parallel 1
+      --ubatch-size 16384
+    cmdStop: podman stop ls-${MODEL_ID}
+    name: "Qwen3.8 27B Q8_K_XL + MTP"
+
+  "qwen3.6-27b-q8":
+    cmd: >
+      ${run}
+      --model /models/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-UD-Q8_K_XL.gguf
+      --spec-type draft-mtp
+      --parallel 1
+      --ubatch-size 16384
+    cmdStop: podman stop ls-${MODEL_ID}
+    name: "Qwen3.6 27B Q8_K_XL (internal MTP)"
+
+  "qwen3.8-35b-a3b":
+    cmd: >
+      ${run}
+      --model /models/Qwen3.6-35B-A3B-GGUF/Qwen3.8-35B-A3B-Q4_K_M.gguf
+      ${moe}
+    cmdStop: podman stop ls-${MODEL_ID}
+    name: "Qwen3.8 35B A3B Q4_K_M"
+
+  "ornith-35b-a3b":
+    cmd: >
+      ${run}
+      --model /models/Ornith/Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf
+      ${moe}
+    cmdStop: podman stop ls-${MODEL_ID}
+    name: "Ornith 1.5 35B A3B coder Q4_K_XL"
+
+  "deepseek-v4-flash":
+    cmd: >
+      ${run}
+      --model /models/deepseek-v4-flash/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf
+      --spec-type draft-dspark
+      --spec-draft-model /models/deepseek-v4-flash/DeepSeek-V4-Flash-DSpark-support-0731.gguf
+      --cache-reuse 256
+      --cont-batching
+    cmdStop: podman stop ls-${MODEL_ID}
+    name: "DeepSeek V4 Flash IQ2XXS + DSpark"
+
+  "openjev-q4":
+    cmd: >
+      ${run}
+      --model /models/systemone/OpenJev-Q4_K_M.gguf
+      --spec-type none
+    cmdStop: podman stop ls-${MODEL_ID}
+    name: "OpenJev Q4_K_M"
+
+  # small and quick to load - handy to check the whole stack works
+  "laya":
+    cmd: >
+      ${run}
+      --model /models/systemone/Laya-Q8_0.gguf
+      --spec-type none
+    cmdStop: podman stop ls-${MODEL_ID}
+    name: "Laya Q8_0 (test)"
+
+  # The gufo models of gufo.container - the active Exec line plus its two
+  # commented alternatives - one llama-swap model each, so the container is
+  # started on demand and stopped when another model takes the memory.
+  #
+  # useModelName must be the id gufo reports for that model (they have spaces).
+  # Only flash next is confirmed; if a request fails on the model name, read the
+  # real one while that model is loaded:
+  #
+  #   curl -s localhost:<port>/v1/models | jq -r '.data[].id'
+  "gufo-flash-next":
+    cmd: >
+      ${gufo_run}
+      --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0.0
+      --presence-penalty 0.0 --repeat-penalty 1.0
+      --model /models/Qwen3.8-Flash-Next-GGUF-Gufo/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf
+      --speculative mtp
+      --mtp-model /models/Qwen3.8-Flash-Next-GGUF-Gufo/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf
+      --mmproj /models/Qwen3.8-Flash-Next-GGUF-Gufo/mmproj-BF16.gguf
+    cmdStop: podman stop ls-${MODEL_ID}
+    useModelName: "Qwen3.8 Flash Next"
+    name: "Qwen3.8 Flash Next (gufo)"
+    aliases: ["Qwen3.8 Flash Next"]
+
+  "gufo-27b":
+    cmd: >
+      ${gufo_run}
+      --model /models/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf
+      --speculative dflash2
+      --dflash-model /models/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+    cmdStop: podman stop ls-${MODEL_ID}
+    useModelName: "Qwen3.8-27B"
+    name: "Qwen3.8 27B Q4_K_XL (gufo, dflash2)"
+
+  "gufo-deepseek":
+    cmd: >
+      ${gufo_run}
+      --model /models/deepseek-v4-flash/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf
+      --dspark-model /models/deepseek-v4-flash/DeepSeek-V4-Flash-DSpark-support-0731.gguf
+    cmdStop: podman stop ls-${MODEL_ID}
+    useModelName: "DeepSeek V4 Flash"
+    name: "DeepSeek V4 Flash IQ2XXS (gufo, dspark)"
+
+  # hipfire: the tags present in /var/lib/models/hipfire (registry
+  # ~/strix/hipfire/registry/models.json), one container per model. hipfire keeps
+  # one resident model and MTP/DFlash/vision sidecars resolve on their own, so
+  # `serve <tag>` is all a model needs here.
+  #
+  # Needs /dev/accel/accel0, which this distrobox does not have: from inside one
+  # these fail with "no such device" until the accel device is passed through, so
+  # they are host-only models for now.
+  "hipfire-4b":
+    cmd: ${hipfire_run} serve qwen3.5:4b 0.0.0.0:11435
+    cmdStop: podman stop ls-${MODEL_ID}
+    useModelName: "qwen3.5:4b"
+    name: "Qwen3.5 4B mq4 (hipfire)"
+
+  "hipfire-27b":
+    cmd: ${hipfire_run} serve qwen3.8:27b 0.0.0.0:11435
+    cmdStop: podman stop ls-${MODEL_ID}
+    useModelName: "qwen3.8:27b"
+    name: "Qwen3.8 27B mq4 (hipfire)"
+
+  "hipfire-35b-a3b":
+    cmd: ${hipfire_run} serve ornith-1.5:35b-a3b 0.0.0.0:11435
+    cmdStop: podman stop ls-${MODEL_ID}
+    useModelName: "ornith-1.5:35b-a3b"
+    name: "Ornith 1.5 35B A3B mq4 (hipfire)"
+
+  # qwen3.8:flash-next and qwen3.8:flash-next-mq4-xts are the same file
+  # (hardlinked), so one entry with the canonical tag
+  "hipfire-flash-next":
+    cmd: ${hipfire_run} serve qwen3.8:flash-next-mq4-xts 0.0.0.0:11435
+    cmdStop: podman stop ls-${MODEL_ID}
+    useModelName: "qwen3.8:flash-next-mq4-xts"
+    name: "Qwen3.8 Flash Next mq4 xts (hipfire)"

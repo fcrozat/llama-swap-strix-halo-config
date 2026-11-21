@@ -1,0 +1,219 @@
+logLevel: info
+healthCheckTimeout: 900
+includeAliasesInList: true
+startPort: 10001
+
+# capacity is only reclaimed when a process actually stops
+globalTTL: 900
+# hard ceiling across all models at once; over it = immediate 429, not queued
+globalConcurrencyLimit: 8
+
+macros:
+  dir: /var/lib/models/llama
+  image: docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-10.0-strix-llama
+  run: |
+    podman run --rm --replace --name ls-${MODEL_ID} --device /dev/dri --device /dev/kfd --group-add video --group-add render --security-opt seccomp=unconfined --ulimit memlock=-1:-1 --volume ${dir}:/models:ro --publish 127.0.0.1:${PORT}:9941 ${image} llama-server --host 0.0.0.0 --port 9941 --alias ${MODEL_ID} -dev ROCm0 -ngl 999 --spec-draft-device ROCm0 --spec-draft-ngl 99 --ctx-size 131072 --load-mode dio --lazy-mode on-direct --kv-unified --cache-type-k f16 --cache-type-v f16 --flash-attn on --fit off --batch-size 16384 --jinja
+  moe: |
+    --spec-type draft-mtp --spec-draft-n-max 3 --cache-reuse 256 --cont-batching --ubatch-size 4096
+  gufo_cache: /var/cache/gufo
+  gufo_image: ghcr.io/gufo-org/toolboxes/gufo-runtime:latest
+  gufo_run: |
+    podman run --rm --replace --name ls-${MODEL_ID} --device /dev/dri --device /dev/kfd --group-add keep-groups --ulimit memlock=-1 --userns keep-id:uid=1000,gid=1000 --volume ${dir}:/models:ro --volume ${gufo_cache}:/gufo_cache:rw,z --publish 127.0.0.1:${PORT}:8080 ${gufo_image} gufo serve --host 0.0.0.0 --port 8080 llm --draft-tokens 7 --sessions 4 --max-pending-per-client 4 --max-tokens 32768 --context 131072 --cache-disk /gufo_cache --reasoning-effort xhigh --preserve-thinking on
+  hipfire_cache: $HOME/hipfire-kcache
+  hipfire_dir: /var/lib/models/hipfire
+  hipfire_image: localhost/hipfire:latest
+  hipfire_run: |
+    podman run --rm --replace --name ls-${MODEL_ID} --device /dev/dri --device /dev/kfd --device /dev/accel/accel0 --group-add keep-groups --security-opt seccomp=unconfined --ulimit memlock=-1:-1 --env HIPFIRE_QWEN4_NPU_TRUNK=auto --volume ${hipfire_dir}:/root/.hipfire/models:ro --volume ${hipfire_cache}:/var/cache/hipfire:z --publish 127.0.0.1:${PORT}:11435 ${hipfire_image}
+
+routing:
+  router:
+    use: capacity
+    settings:
+      capacity:
+        pools:
+          # MiB of unified memory you are willing to have resident at once.
+          # START HERE: measure real usage, then tighten to ~90% of physical.
+          mem: 118000
+          # only one hipfire container may claim /dev/accel/accel0 at a time.
+          # drop this pool and every "npu: 1" below if that is not a constraint
+          npu: 1
+  scheduler:
+    use: fifo
+    settings:
+      fifo:
+        priority:
+          hipfire-4b: 10        # smallest, fastest cold start
+          openjev-q4: 5
+          gufo-27b: 3
+
+models:
+  deepseek-v4-flash:
+    name: DeepSeek V4 Flash IQ2XXS + DSpark
+    cmd: |
+      ${run}
+      --model /models/deepseek-v4-flash/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf --spec-type draft-dspark --spec-draft-model /models/deepseek-v4-flash/DeepSeek-V4-Flash-DSpark-support-0731.gguf --cache-reuse 256 --cont-batching
+    cmdStop: podman stop ls-deepseek-v4-flash
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 26000 }
+    evict_cost: 10
+    concurrencyLimit: 4
+
+  gufo-27b:
+    name: Qwen3.8 27B Q4_K_XL (gufo, dflash2)
+    useModelName: Qwen3.8-27B
+    cmd: |
+      ${gufo_run}
+      --model /models/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf --speculative dflash2 --dflash-model /models/Qwen3.8-27B-DFlash2-GGUF/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+    cmdStop: podman stop ls-gufo-27b
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 30000 }
+    evict_cost: 40
+    concurrencyLimit: 4
+
+  gufo-deepseek:
+    name: DeepSeek V4 Flash IQ2XXS (gufo, dspark)
+    useModelName: DeepSeek V4 Flash
+    cmd: |
+      ${gufo_run}
+      --model /models/deepseek-v4-flash/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf --dspark-model /models/deepseek-v4-flash/DeepSeek-V4-Flash-DSpark-support-0731.gguf
+    cmdStop: podman stop ls-gufo-deepseek
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 26000 }
+    evict_cost: 10
+    concurrencyLimit: 4
+
+  gufo-flash-next:
+    name: Qwen3.8 Flash Next (gufo)
+    useModelName: Qwen3.8 Flash Next
+    aliases:
+      - Qwen3.8 Flash Next
+    cmd: |
+      ${gufo_run}
+      --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 --presence-penalty 0.0 --repeat-penalty 1.0 --model /models/Qwen3.8-Flash-Next-GGUF-Gufo/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf --speculative mtp --mtp-model /models/Qwen3.8-Flash-Next-GGUF-Gufo/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf --mmproj /models/Qwen3.8-Flash-Next-GGUF-Gufo/mmproj-BF16.gguf
+    cmdStop: podman stop ls-gufo-flash-next
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 34000 }
+    evict_cost: 50
+    concurrencyLimit: 4
+
+  hipfire-27b:
+    name: Qwen3.8 27B mq4 (hipfire)
+    useModelName: qwen3.8:27b
+    cmd: |
+      ${hipfire_run}
+      serve qwen3.8:27b 0.0.0.0:11435
+    cmdStop: podman stop ls-hipfire-27b
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 28000, npu: 1 }
+    evict_cost: 30
+
+  hipfire-35b-a3b:
+    name: Ornith 1.5 35B A3B mq4 (hipfire)
+    useModelName: ornith-1.5:35b-a3b
+    cmd: |
+      ${hipfire_run}
+      serve ornith-1.5:35b-a3b 0.0.0.0:11435
+    cmdStop: podman stop ls-hipfire-35b-a3b
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 32000, npu: 1 }
+    evict_cost: 30
+
+  hipfire-4b:
+    name: Qwen3.5 4B mq4 (hipfire)
+    useModelName: qwen3.5:4b
+    cmd: |
+      ${hipfire_run}
+      serve qwen3.5:4b 0.0.0.0:11435
+    cmdStop: podman stop ls-hipfire-4b
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 8000, npu: 1 }
+    evict_cost: 5
+
+  hipfire-flash-next:
+    name: Qwen3.8 Flash Next mq4 xts (hipfire)
+    useModelName: qwen3.8:flash-next-mq4-xts
+    cmd: |
+      ${hipfire_run}
+      serve qwen3.8:flash-next-mq4-xts 0.0.0.0:11435
+    cmdStop: podman stop ls-hipfire-flash-next
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 32000, npu: 1 }
+    evict_cost: 30
+
+  laya:
+    name: Laya Q8_0 (test)
+    cmd: |
+      ${run}
+      --model /models/systemone/Laya-Q8_0.gguf --spec-type none
+    cmdStop: podman stop ls-laya
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 40000 }
+    evict_cost: 1
+    concurrencyLimit: 4
+
+  openjev-q4:
+    name: OpenJev Q4_K_M
+    cmd: |
+      ${run}
+      --model /models/systemone/OpenJev-Q4_K_M.gguf --spec-type none
+    cmdStop: podman stop ls-openjev-q4
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 26000 }
+    evict_cost: 1
+    concurrencyLimit: 4
+
+  ornith-35b-a3b:
+    name: Ornith 1.5 35B A3B coder Q4_K_XL
+    cmd: |
+      ${run}
+      --model /models/Ornith/Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf ${moe}
+    cmdStop: podman stop ls-ornith-35b-a3b
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 34000 }
+    evict_cost: 30
+    concurrencyLimit: 4
+
+  qwen3.6-27b-q8:
+    name: Qwen3.6 27B Q8_K_XL (internal MTP)
+    cmd: |
+      ${run}
+      --model /models/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-UD-Q8_K_XL.gguf --spec-type draft-mtp --parallel 1 --ubatch-size 16384
+    cmdStop: podman stop ls-qwen3.6-27b-q8
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 45000 }
+    evict_cost: 60
+    concurrencyLimit: 1
+
+  qwen3.8-27b:
+    name: Qwen3.8 27B Q4_K_XL + MTP
+    cmd: |
+      ${run}
+      --model /models/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf --spec-type draft-mtp --spec-draft-model /models/Qwen3.8-27B-GGUF/MTP/mtp-Qwen3.8-27B-Q4_0.gguf --parallel 1 --ubatch-size 16384
+    cmdStop: podman stop ls-qwen3.8-27b
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 30000 }
+    evict_cost: 40
+    concurrencyLimit: 1
+
+  qwen3.8-27b-q8:
+    name: Qwen3.8 27B Q8_K_XL + MTP
+    cmd: |
+      ${run}
+      --model /models/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q8_K_XL.gguf --spec-type draft-mtp --spec-draft-model /models/Qwen3.8-27B-GGUF/MTP/mtp-Qwen3.8-27B-Q4_0.gguf --parallel 1 --ubatch-size 16384
+    cmdStop: podman stop ls-qwen3.8-27b-q8
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 45000 }
+    evict_cost: 60
+    concurrencyLimit: 1
+
+  qwen3.8-35b-a3b:
+    name: Qwen3.8 35B A3B Q4_K_M
+    cmd: |
+      ${run}
+      --model /models/Qwen3.6-35B-A3B-GGUF/Qwen3.8-35B-A3B-Q4_K_M.gguf ${moe}
+    cmdStop: podman stop ls-qwen3.8-35b-a3b
+    proxy: http://localhost:${PORT}
+    capacities: { mem: 34000 }
+    evict_cost: 30
+    concurrencyLimit: 4
+
