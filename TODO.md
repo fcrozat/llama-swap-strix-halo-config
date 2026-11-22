@@ -1,31 +1,14 @@
 # TODO
 
-Work items for the strix launchers. `README.md`, `CHANGELOG.md` and `LICENSE.md`
-in this directory came out of the llama-swap release tarball and are upstream
-files; `capacity-ttl.yaml`, `run-*.sh`, `nix-loom-*.sh`, `loom/` and this file
-are ours.
+Open decisions on the strix launchers. `AGENTS.md` holds the standing rules: how
+to apply a config change without taking the agent's own model down, how to
+measure what a model really costs, what is ours and what came out of the
+llama-swap tarball.
 
-Two things every item here depends on:
-
-- Never `systemctl --user stop llama-swap` from an agent session. The unit serves
-  the model the agent itself runs on (`PI_PROVIDER=llama-chooser`), so a stop
-  takes the assistant down until something starts it again. A `restart` is brief
-  and `-watch-config` (on by default in `run-llama-swap.sh`) applies config edits
-  without one. To free memory held by a single model: `podman stop ls-<name>` or
-  `curl -X POST localhost:8080/api/models/unload/<model_id>`.
-- Size from `host_available_mib`, never from RSS. The gufo loader prints
-  `host_available_mib` at `load_started` and `load_completed`; RSS showed 6.4 GiB
-  for a model holding 111.8 GiB, and `Mlocked` stayed 0, because the bulk is kfd
-  device memory and streaming buffers.
-
-Measured 2026-11-22 on the 124.4 GiB box, baseline 122.0 GiB available with no
-model container running (the 2.4 GiB is grafana, prometheus, tumbleweed):
-
-| entry           | declared | really holds       |
-|-----------------|----------|--------------------|
-| gufo-flash-next | 112000   | 111.8 GiB (was 34000) |
-| loom-inkling    | 70000    | 69.9 GiB           |
-| gufo-ds41       | 114000   | not measured       |
+Measured 2026-11-22, with 122.0 GiB available and no model container running (the
+2.4 GiB is grafana, prometheus, tumbleweed): gufo-flash-next 111.8 GiB against a
+declared 34000, loom-inkling 69.9 GiB against 70000, gufo-ds41 114000 chosen but
+never measured.
 
 ## 1. Measure the five entries that are still guesses
 
@@ -33,9 +16,9 @@ hipfire-4b 8000, gufo-deepseek 26000, deepseek-v4-flash 26000, hipfire-27b 28000
 gufo-27b 30000. flash-next was 3.3x under-declared, so assume the others are too
 until shown otherwise.
 
-For each: `podman logs ls-<name> | grep host_available_mib`, take the
-before/after delta, and note the sessions/context it was loaded with. Then
-re-check the `globalCapacity` pool ceiling (118000) against 124.4 GiB of RAM.
+For each: the `load_started` -> `load_completed` delta (AGENTS.md, Memory), noted
+against the sessions and context it was loaded with. Then re-check the 118000
+pool ceiling against 124.4 GiB of physical RAM.
 
 Why: loom-inkling at 70000 is allowed to share the pool with anything declared
 under 48000, which is all five. If any of them holds more than declared, that
@@ -77,8 +60,6 @@ Decide what is publishable before it leaves the box:
   and the strix sizing notes.
 - `loom/README.md`, `nix-loom-build.sh` and `nix-loom-gufo.sh` are host-agnostic
   and would be useful to anyone building gufo + Loom on Nix.
-- `.gitignore` already keeps out the llama-swap binaries, `*.tar.gz`, the vendored
-  `changelog/` tree, `*.log`, `*.pid`, `*.sock`.
 
 Options: one private remote for everything, or split the reusable Nix/Loom part
 into a public repo and keep the sizing file private. Either way, re-read the diff
