@@ -58,6 +58,20 @@ macros:
   gufo_ds41_run: >-
     ${gufo_pod} ${gufo_image} ${gufo_serve_llm} --sessions 2
     --max-pending-per-client 4 ${gufo_serve_tail}
+  # Loom (github.com/loom-fun/loom-gufo-extension) runs a package's own
+  # kernels through libloom_text_embed. It needs extension API 0.3.35, which the
+  # toolbox image (0.3.20) does not have, so this gufo is built by Nix into the
+  # gufo-nix volume; loom/gufo symlinks it (see loom/README.md). gufo_pod is not
+  # reusable: Loom's GPU memory reservation needs seccomp=unconfined, and the
+  # module is compiled in, so mounting ${gufo_ext} would only invite a mismatch.
+  loom_dir: $HOME/strix/launchers/loom
+  loom_image: docker.io/nixos/nix:latest
+  loom_pod: >-
+    podman run --rm --replace --name ls-${MODEL_ID} --device /dev/dri --device
+    /dev/kfd --group-add keep-groups --security-opt seccomp=unconfined --ulimit
+    memlock=-1 --userns keep-id:uid=1000,gid=1000 --volume ${dir}:/models:ro
+    --volume ${loom_dir}:/loom:ro --volume gufo-nix:/nix:ro --env
+    GUFO_MODELS_DIR=/models --publish 127.0.0.1:${PORT}:8080
   ds41_dir: /models/DeepSeek-V4.1-Flash-1017
   ds41_q: DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M
   ds41_draft: DeepSeek-V4.1-Flash-1017-DSpark-draft-Q2K-Q4K.gguf
@@ -167,6 +181,28 @@ models:
     capacities: { mem: 34000 }
     # no ttl key: inherits globalTTL 900 (ttl -1 = inherit, 0 = never unload)
     evict_cost: 50
+    concurrencyLimit: 4
+
+  # `gufo model install inkling-2-mini-loom` put the package and both GGUFs in
+  # ${dir}/inkling-2-mini-loom; the served name is Inkling-2-Mini, not that id.
+  # Loom commits its whole pool at load: 17.6 GiB of weights plus the state of
+  # the package's chat preset (context_capacity 1048576, rows 4), measured at
+  # 69.9 GiB (gufo: host_available_mib 124910 -> 53340), and it does not shrink
+  # with --context. 85000 is above that on purpose: flash-next claims 34000 but
+  # really holds ~107 GiB, so only the pool ceiling keeps the two apart.
+  loom-inkling:
+    name: Inkling-2-Mini Q4_K_XL (gufo + Loom)
+    useModelName: Inkling-2-Mini
+    aliases:
+      - Inkling-2-Mini
+    cmd: |
+      ${loom_pod} ${loom_image} ${gufo_serve_llm} ${gufo_sessions}
+      --context 131072 --max-tokens 4096 --model inkling-2-mini-loom
+    cmdStop: podman stop ls-loom-inkling
+    checkEndpoint: /ready
+    proxy: http://localhost:${PORT}
+    capacities: {mem: 85000}
+    evict_cost: 45
     concurrencyLimit: 4
 
   hipfire-27b:
