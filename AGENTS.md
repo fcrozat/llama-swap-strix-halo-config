@@ -7,19 +7,32 @@ itself, rootless as uid 1000, each published on 127.0.0.1 so nothing bypasses it
 
 ## Applying a change
 
-**One model, not the service.** Memory is freed with `podman stop ls-<model_id>`
-or `curl -X POST localhost:8080/api/models/unload/<model_id>`. Guardrail:
-`systemctl --user stop llama-swap` also stops the model this agent answers from,
-so it ends the session mid-reply; `restart` costs a ~10-20 s preload. Neither is
-needed for a config edit - `run-llama-swap.sh` passes `-watch-config` (on by
-default, `WATCH_CONFIG=false` to disable) and a saved file is picked up in ~2 s.
+**A save restarts the resident engine.** `-watch-config` is on by default
+(`WATCH_CONFIG=false` in `run-llama-swap.sh` turns it off) and polls every 2 s.
+When the config changes, llama-swap stops the running model container and starts
+it again - any save, even one that edits only a comment, and even for a model
+whose entry did not change. Observed: a save recreated `ls-gufo-flash-next` and
+the cold reload took 61 s, and every client that wanted that model waited with
+it. So a save is a service action: announced, done between requests, and never
+while a person or another agent session could be mid-request. That is the same
+care as `systemctl --user restart llama-swap` needs, which is heavier only
+because the proxy goes down too.
 
-1. Edit `capacity-ttl.yaml`. `config.yaml` is a symlink to it; keep it one.
-2. `./llama-swap -config config.yaml -validate` - done when it prints
+`systemctl --user stop llama-swap` stays off the table outright: it takes away the
+model this agent answers from and nothing returns it until the unit starts again.
+To free memory with no config change, unload one model instead -
+`podman stop ls-<model_id>` or `curl -X POST localhost:8080/api/models/unload/<model_id>`.
+
+1. Look at what is warm first: `podman ps --format '{{.Names}}' | grep '^ls-'`.
+   Anything resident is what the save will interrupt.
+2. Edit `capacity-ttl.yaml` (`config.yaml` is a symlink to it; keep it one), then
+   `./llama-swap -config config.yaml -validate` - done when it prints
    `config is valid: N model(s)` with N moved by exactly what was added.
-3. Save, then confirm the id and its alias in `curl -s localhost:8080/v1/models`.
-4. Commit. The history is this file's changelog: one commit per behaviour change,
-   and it explains the number rather than just the edit.
+3. Save, then wait for `configuration reloaded` followed by `Health check passed`
+   in `curl -s localhost:8080/logs`; the box is not usable before that.
+4. Confirm the id and its alias in `/v1/models`, and commit - the history is this
+   file's changelog, one commit per behaviour change, explaining the number rather
+   than just the edit.
 
 Health is `/health` (swap) and `/ready` (a loaded engine). `/v1/models/{id}` is
 not implemented - it 404s for good ids too, so never treat it as a health check.
