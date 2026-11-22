@@ -89,7 +89,9 @@ Two traps around gufo:
   0.3.35 while the toolbox image is on 0.3.20 - hence the Nix-built gufo in the
   `gufo-nix` volume and `${loom_serve_llm}` naming `/loom/gufo` (bare `gufo` is
   not on that image's PATH). `loom/README.md` rebuilds it in ~3 minutes and
-  re-points the symlinks; the config needs no change.
+  re-points the symlinks; the config needs no change. Only `loom-inkling` runs
+  that way: `Inkling-2-Mini` itself is served by the `inkling2` module, which is
+  in the registry, built for the toolbox image's API, and needs no Nix.
 
 ## Testing a model
 

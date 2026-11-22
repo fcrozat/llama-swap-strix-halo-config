@@ -194,8 +194,51 @@ models:
     evict_cost: 50
     concurrencyLimit: 4
 
+  # Inkling 2 Mini on its own engine: the inkling2 module
+  # (github.com/headbouyJB/inkling2-gufo 0.1.2 = registry release 8bb6cd5, the
+  # reviewed release the registry points at) rather than Loom's kernels. It runs
+  # on the toolbox image through ${gufo_ext}, so it is the second module in that
+  # store after deepseek41flash and the same rule applies: after `podman pull`,
+  # ./run-gufo.sh ext update, or gufo skips it and this model cannot load.
+  # The weights are the Loom package's GGUF (architecture `inkling2`, Unsloth
+  # root layout); that package's DSpark draft is unusable here - the extension
+  # declares no speculative mode and refuses one at load.
+  # Measured 2026-11-22 with these exact flags: host_available_mib 124581 ->
+  # 84609 = 40.0 GiB at 4 sessions / 131072 context, 12.4 s load, 43.4 tok/s
+  # decode. Only 2.3 GiB of that was RAM cache, on a budget that defaults to
+  # auto (half of free RAM, at most 32 GiB) and grows with use, so the number
+  # would have crept: --cache-ram-bytes bounds it and 46000 is the measured
+  # 40000 plus what 8 GiB of cache may still take. gufo's own
+  # gpu_device_used_mib read 55250 for the same load; the host_available delta
+  # is the claim on physical RAM, so that 15 GiB gap is unexplained - TODO.md.
+  # No --mmproj: mmproj-Inkling-2-Mini-Q8_0.gguf is not on disk, so image
+  # requests get 400 invalid_messages until it is fetched.
+  gufo-inkling:
+    name: Inkling-2-Mini Q4_K_XL (gufo, inkling2 kernels)
+    # upstream accepts exactly the id the module lists in /v1/models -
+    # "Inkling-2-Mini" and "inkling2" are refused there, so useModelName is not
+    # the client name; the alias is.
+    useModelName: inkling-2-mini
+    aliases:
+      - Inkling-2-Mini
+    cmd: |
+      ${gufo_run}
+      --model /models/inkling-2-mini-loom/Inkling-2-Mini-UD-Q4_K_XL.gguf
+      --cache-ram-bytes 8589934592
+    cmdStop: podman stop ls-gufo-inkling
+    checkEndpoint: /ready
+    proxy: http://localhost:${PORT}
+    capacities: {mem: 46000}
+    # 12 s to bring back against flash-next's 61 s, so it is the one that leaves
+    evict_cost: 30
+    concurrencyLimit: 4
+
   # `gufo model install inkling-2-mini-loom` put the package and both GGUFs in
   # ${dir}/inkling-2-mini-loom; the served name is Inkling-2-Mini, not that id.
+  # The inkling2 module above took the client name, so this is the fallback:
+  # clients reach it as Inkling-2-Mini-Loom. evict_cost 10 because 70 GiB is the
+  # biggest claim in the pool after ds41 and flash-next, and nothing should keep
+  # a fallback resident ahead of the model someone is actually using.
   # Loom commits its whole pool at load: 17.6 GiB of weights plus the state of
   # the package's chat preset (context_capacity 1048576, rows 4), measured at
   # 69.9 GiB (gufo: host_available_mib 124910 -> 53340) and it does not shrink
@@ -203,10 +246,10 @@ models:
   # declaring its measured 112000, the 118000 pool keeps the two apart without
   # inflating either number.
   loom-inkling:
-    name: Inkling-2-Mini Q4_K_XL (gufo + Loom)
+    name: Inkling-2-Mini Q4_K_XL (gufo + Loom, fallback)
     useModelName: Inkling-2-Mini
     aliases:
-      - Inkling-2-Mini
+      - Inkling-2-Mini-Loom
     cmd: |
       ${loom_pod} ${loom_image} ${loom_serve_llm} ${gufo_sessions}
       --context 131072 --max-tokens 4096 --model inkling-2-mini-loom
@@ -214,7 +257,7 @@ models:
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
     capacities: {mem: 70000}
-    evict_cost: 45
+    evict_cost: 10
     concurrencyLimit: 4
 
   hipfire-27b:

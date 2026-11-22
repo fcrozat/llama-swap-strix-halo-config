@@ -65,3 +65,22 @@ Options: one private remote for everything, or split the reusable Nix/Loom part
 into a public repo and keep the sizing file private. Either way, re-read the diff
 for anything sensitive first - nothing was added deliberately, but the config is
 host-specific by nature.
+
+## 4. What the first inkling2 load left open
+
+gufo-inkling is declared from the host delta (124581 -> 84609 = 40.0 GiB at 4
+sessions / 131072) but the same `load_completed` line reported
+`gpu_device_used_mib=55250`. The host delta is what the pool is about, so that is
+what was declared; if the device figure is the real claim then 46000 lets in
+co-residency the box cannot pay. Read both again on the next load, and settle it
+by watching /proc/meminfo while a second model loads beside it.
+
+Also open on that entry:
+
+- decode was 43.4 tok/s on one 48-token completion - not the head-to-head against
+  the Loom engine it replaced as the `Inkling-2-Mini` name, and prefill was never
+  measurable at 27 prompt tokens. Both numbers before the fallback is deleted.
+- `enable_thinking: false` still returned 41 `reasoning_tokens` (content was
+  right). The extension says reasoning-off is its own doing, not the template's,
+  so check whether gufo's flag reaches it before clients rely on it.
+- image input needs `mmproj-Inkling-2-Mini-Q8_0.gguf` (ggml-org), not on disk.
