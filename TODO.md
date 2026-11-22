@@ -84,3 +84,10 @@ Also open on that entry:
   right). The extension says reasoning-off is its own doing, not the template's,
   so check whether gufo's flag reaches it before clients rely on it.
 - image input needs `mmproj-Inkling-2-Mini-Q8_0.gguf` (ggml-org), not on disk.
+- the entry inherits `--reasoning-effort xhigh` from `gufo_serve_tail`, which the
+  extension maps to 0.99 against its own unset default of 0.9, and its M4 log
+  says effort barely moves this model while `high`-to-`max` only lengthens the
+  reasoning on some prompts - so Inkling may be paying latency for nothing.
+  Unsloth's guide names no effort level, so nothing changed without the
+  measurement: same prompt at xhigh and at high, compare reasoning length and
+  whether the answer ever differs.

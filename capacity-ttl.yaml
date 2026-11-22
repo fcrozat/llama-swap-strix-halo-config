@@ -213,6 +213,18 @@ models:
   # is the claim on physical RAM, so that 15 GiB gap is unexplained - TODO.md.
   # No --mmproj: mmproj-Inkling-2-Mini-Q8_0.gguf is not on disk, so image
   # requests get 400 invalid_messages until it is fetched.
+  # Sampling is Unsloth's Inkling 2 Mini recommendation (unsloth.ai/docs/models
+  # /inkling-2-mini): temperature 1.0, top-p 1.0, top-k 0, min-p 0.0 - no
+  # truncation beyond temperature. The module registers those same four as its
+  # gufo preset (src/runner.cpp: "Unsloth/OpenAI defaults: temperature 1, no
+  # truncation"), so the flags change nothing today; they pin the vendor numbers
+  # in case a later module release moves its preset. They do not cost clients
+  # per-request control either: flash-next carries --temperature 1.0 the same
+  # way, and against it a request at temperature 0 answered identically three
+  # times while temperature 1.5 gave three different answers. The guide names no
+  # presence/repetition/frequency penalties, so none are added and gufo leaves
+  # them off. It is silent on reasoning effort, which leaves the tail's xhigh
+  # (= 0.99) against the extension's own 0.9 default - TODO.md.
   gufo-inkling:
     name: Inkling-2-Mini Q4_K_XL (gufo, inkling2 kernels)
     # upstream accepts exactly the id the module lists in /v1/models -
@@ -225,6 +237,7 @@ models:
       ${gufo_run}
       --model /models/inkling-2-mini-loom/Inkling-2-Mini-UD-Q4_K_XL.gguf
       --cache-ram-bytes 8589934592
+      --temperature 1.0 --top-p 1.0 --top-k 0 --min-p 0.0
     cmdStop: podman stop ls-gufo-inkling
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
