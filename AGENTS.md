@@ -34,9 +34,9 @@ reference, and `run-*.sh` (each documents itself in its header), `nix-loom-*.sh`
 Nothing upstream is tracked. A release tarball drops `README.md`, `CHANGELOG.md`
 and a `changelog/` tree; `.gitignore` keeps those out beside the `llama-swap` /
 `llama-swap.v*` pins and `*.tar.gz` - downloads, not source. `LICENSE.md` stays.
-Upstream's config documentation is its own repo README; the keys are also
-machine-readable via the schema modeline, which `simple-routing.yaml` carries and
-`capacity-ttl.yaml` does not:
+Upstream's config documentation is its own repo README. The live config and
+`simple-routing.yaml` carry the schema modeline an editor resolves keys and pool
+names against (`capacity-old.yaml` is a superseded snapshot, left as it was):
 
     # yaml-language-server: $schema=https://raw.githubusercontent.com/mostlygeek/llama-swap/refs/heads/main/config-schema.json
 
