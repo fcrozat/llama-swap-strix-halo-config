@@ -203,16 +203,25 @@ models:
   # The weights are the Loom package's GGUF (architecture `inkling2`, Unsloth
   # root layout); that package's DSpark draft is unusable here - the extension
   # declares no speculative mode and refuses one at load.
-  # Measured 2026-11-22 with these exact flags: host_available_mib 124581 ->
-  # 84609 = 40.0 GiB at 4 sessions / 131072 context, 12.4 s load, 43.4 tok/s
-  # decode. Only 2.3 GiB of that was RAM cache, on a budget that defaults to
-  # auto (half of free RAM, at most 32 GiB) and grows with use, so the number
-  # would have crept: --cache-ram-bytes bounds it and 46000 is the measured
-  # 40000 plus what 8 GiB of cache may still take. gufo's own
-  # gpu_device_used_mib read 55250 for the same load; the host_available delta
-  # is the claim on physical RAM, so that 15 GiB gap is unexplained - TODO.md.
-  # No --mmproj: mmproj-Inkling-2-Mini-Q8_0.gguf is not on disk, so image
-  # requests get 400 invalid_messages until it is fetched.
+  # Measured 2026-11-22 with these exact flags (projector included):
+  # host_available_mib 124441 -> 83577 = 40864 MiB at 4 sessions / 131072
+  # context, 13.5 s load, 43.4 tok/s decode. Only 2.3 GiB of that was RAM cache,
+  # on a budget that defaults to auto (half of free RAM, at most 32 GiB) and
+  # grows with use, so the number would have crept: --cache-ram-bytes bounds it,
+  # and 47000 is the measured 40864 plus the ~5900 that cache may still take on
+  # the way to its 8 GiB bound. Without the projector the same load measured
+  # 124581 -> 84609 = 39972 MiB in 12.4 s, so the projector costs 892 MiB and
+  # 1.1 s. gufo's own gpu_device_used_mib read 55250 without it and 56150 with;
+  # the host_available delta is the claim on physical RAM, so that ~15 GiB gap
+  # is unexplained - TODO.md.
+  # --mmproj is what enables image input: mmproj-Inkling-2-Mini-Q8_0.gguf
+  # (345910944 bytes, huggingface.co/ggml-org/Inkling-2-Mini-GGUF, the file the
+  # module names - unsloth's own copy is mmproj-F16.gguf at 0.64 GB) sitting
+  # beside the weights in the ${dir}:/models:ro mount. Proved with a real image
+  # request through llama-swap, not by reading a capability field: the module
+  # README says /v1/models then advertises input_modalities [text, image], and
+  # on gufo 0.35.0 it does not - the engine's /v1/models returns no such key for
+  # any entry, and llama-swap strips what it does not know anyway.
   # Sampling is Unsloth's Inkling 2 Mini recommendation (unsloth.ai/docs/models
   # /inkling-2-mini): temperature 1.0, top-p 1.0, top-k 0, min-p 0.0 - no
   # truncation beyond temperature. The module registers those same four as its
@@ -236,12 +245,13 @@ models:
     cmd: |
       ${gufo_run}
       --model /models/inkling-2-mini-loom/Inkling-2-Mini-UD-Q4_K_XL.gguf
+      --mmproj /models/inkling-2-mini-loom/mmproj-Inkling-2-Mini-Q8_0.gguf
       --cache-ram-bytes 8589934592
       --temperature 1.0 --top-p 1.0 --top-k 0 --min-p 0.0
     cmdStop: podman stop ls-gufo-inkling
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
-    capacities: {mem: 46000}
+    capacities: {mem: 47000}
     # 12 s to bring back against flash-next's 61 s, so it is the one that leaves
     evict_cost: 30
     concurrencyLimit: 4

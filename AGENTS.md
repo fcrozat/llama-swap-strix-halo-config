@@ -103,6 +103,12 @@ from curl's wall time: the first request includes the container start and load
 Give thinking models headroom - `max_tokens` near 1000 or more. Asked for 220,
 Inkling spent 218 of them on reasoning and returned empty `content`.
 
+Capability fields lie. The inkling2 README says `/v1/models` advertises
+`input_modalities: [text, image]` once a projector is loaded; on gufo 0.35.0 no
+entry carries that key, and llama-swap strips what it does not know anyway. Prove
+a modality by asking for it - a real image request that answers correctly - not
+by a field.
+
 Names have three meanings: the `gufo model install` id (`inkling-2-mini-loom`),
 `useModelName` sent upstream (`Inkling-2-Mini`), and `aliases` clients may send.
 Request the alias, not the install id.
