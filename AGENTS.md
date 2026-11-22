@@ -26,15 +26,19 @@ not implemented - it 404s for good ids too, so never treat it as a health check.
 
 ## Ours vs vendored
 
-`README.md`, `CHANGELOG.md`, `LICENSE.md` and `changelog/` came out of a
-llama-swap release tarball: upstream material, and README.md is where upstream's
-own config documentation lives. Everything else belongs to this box -
-`capacity-ttl.yaml` (live config), `capacity-old.yaml` and `simple-routing.yaml`
-(earlier layouts, for reference), `run-*.sh` (each documents itself in its
-header), `nix-loom-*.sh`, `loom/`, `TODO.md`.
+`capacity-ttl.yaml` is the live config (`config.yaml` is a symlink to it),
+`capacity-old.yaml` and `simple-routing.yaml` are earlier layouts kept for
+reference, and `run-*.sh` (each documents itself in its header), `nix-loom-*.sh`,
+`loom/` and `TODO.md` are ours.
 
-Binaries and archives stay out of git on purpose: the `llama-swap` /
-`llama-swap.v*` pins and `*.tar.gz` are downloads, not source.
+Nothing upstream is tracked. A release tarball drops `README.md`, `CHANGELOG.md`
+and a `changelog/` tree; `.gitignore` keeps those out beside the `llama-swap` /
+`llama-swap.v*` pins and `*.tar.gz` - downloads, not source. `LICENSE.md` stays.
+Upstream's config documentation is its own repo README; the keys are also
+machine-readable via the schema modeline, which `simple-routing.yaml` carries and
+`capacity-ttl.yaml` does not:
+
+    # yaml-language-server: $schema=https://raw.githubusercontent.com/mostlygeek/llama-swap/refs/heads/main/config-schema.json
 
 ## Memory: measured, not guessed
 

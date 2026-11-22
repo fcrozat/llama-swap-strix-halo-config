@@ -11,6 +11,10 @@
 # vendored, and nothing here builds it - no go.mod, no importer
 /changelog/
 
+# the tarball's own upstream docs: extracted beside the binary, nothing of ours
+/README.md
+/CHANGELOG.md
+
 # runtime droppings
 *.log
 *.pid
