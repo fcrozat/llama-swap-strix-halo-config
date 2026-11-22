@@ -178,7 +178,13 @@ models:
     cmdStop: podman stop ls-gufo-flash-next
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
-    capacities: { mem: 34000 }
+    # Measured, not guessed: available headroom 122.0 GiB unloaded -> 10.2 GiB
+    # warm = 111.8 GiB (2.4 GiB belongs to the monitoring containers). RSS shows
+    # 6.4 GiB because the rest is kfd device memory and streaming buffers, and
+    # Mlocked stays 0; --cache-ram-bytes is already capped (32 GiB default), so
+    # this is not a cache that will shrink. It therefore cannot share the 118000
+    # pool with any other model - which is what really happens today.
+    capacities: {mem: 112000}
     # no ttl key: inherits globalTTL 900 (ttl -1 = inherit, 0 = never unload)
     evict_cost: 50
     concurrencyLimit: 4
@@ -187,9 +193,10 @@ models:
   # ${dir}/inkling-2-mini-loom; the served name is Inkling-2-Mini, not that id.
   # Loom commits its whole pool at load: 17.6 GiB of weights plus the state of
   # the package's chat preset (context_capacity 1048576, rows 4), measured at
-  # 69.9 GiB (gufo: host_available_mib 124910 -> 53340), and it does not shrink
-  # with --context. 85000 is above that on purpose: flash-next claims 34000 but
-  # really holds ~107 GiB, so only the pool ceiling keeps the two apart.
+  # 69.9 GiB (gufo: host_available_mib 124910 -> 53340) and it does not shrink
+  # with --context, so 70000 is simply what it costs. With flash-next now
+  # declaring its measured 112000, the 118000 pool keeps the two apart without
+  # inflating either number.
   loom-inkling:
     name: Inkling-2-Mini Q4_K_XL (gufo + Loom)
     useModelName: Inkling-2-Mini
@@ -201,7 +208,7 @@ models:
     cmdStop: podman stop ls-loom-inkling
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
-    capacities: {mem: 85000}
+    capacities: {mem: 70000}
     evict_cost: 45
     concurrencyLimit: 4
 

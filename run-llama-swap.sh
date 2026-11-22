@@ -4,6 +4,7 @@
 #   ./run-llama-swap.sh                      # UI http://localhost:18080/ui/
 #   LISTEN=:9000 ./run-llama-swap.sh         # other port (gufo owns :8080)
 #   CONFIG=/path/other.yaml ./run-llama-swap.sh
+#   WATCH_CONFIG=false ./run-llama-swap.sh   # ignore config.yaml edits
 #   ./run-llama-swap.sh -- -listen :9000     # pass raw flags to llama-swap
 #
 # Handles the one thing that differs between the host and a distrobox: models
@@ -23,6 +24,9 @@ MODELS_HOST=${MODELS_HOST:-/var/lib/models}
 IN_DISTROBOX=${IN_DISTROBOX:-/run/host/var/lib/models}
 CONFIG=${CONFIG:-$HOME/strix/launchers/config.yaml}
 LISTEN=${LISTEN:-:9931}
+# reload config.yaml when it changes: a model entry then applies without a unit
+# restart, which would drop whatever model an interactive session is running on
+WATCH_CONFIG=${WATCH_CONFIG:-true}
 # built release tarball checkout; override with LLAMA_SWAP=/path/to/llama-swap
 BIN=${LLAMA_SWAP:-$HOME/strix/launchers/llama-swap}
 
@@ -55,6 +59,6 @@ fi
 echo "models: $MODELS  config: $CONFIG  listen: $LISTEN" >&2
 if [[ ${1:-} == -- ]]; then
   shift
-  exec "$BIN" -config "$CONFIG" "$@"
+  exec "$BIN" -config "$CONFIG" -watch-config="$WATCH_CONFIG" "$@"
 fi
-exec "$BIN" -config "$CONFIG" -listen "$LISTEN"
+exec "$BIN" -config "$CONFIG" -listen "$LISTEN" -watch-config="$WATCH_CONFIG"
