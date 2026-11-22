@@ -7,16 +7,17 @@ itself, rootless as uid 1000, each published on 127.0.0.1 so nothing bypasses it
 
 ## Applying a change
 
-**A save restarts the resident engine.** `-watch-config` is on by default
-(`WATCH_CONFIG=false` in `run-llama-swap.sh` turns it off) and polls every 2 s.
-When the config changes, llama-swap stops the running model container and starts
-it again - any save, even one that edits only a comment, and even for a model
-whose entry did not change. Observed: a save recreated `ls-gufo-flash-next` and
-the cold reload took 61 s, and every client that wanted that model waited with
-it. So a save is a service action: announced, done between requests, and never
-while a person or another agent session could be mid-request. That is the same
-care as `systemctl --user restart llama-swap` needs, which is heavier only
-because the proxy goes down too.
+**A save restarts the resident engine, so this unit ignores saves.**
+`-watch-config` polls every 2 s and, when the config changes, stops the running
+model container and starts it again - any save, even one that edits only a
+comment, even for a model whose entry did not change. Observed: a save recreated
+`ls-gufo-flash-next` and the cold reload took 61 s, with every client that wanted
+that model waiting behind it. `run-llama-swap.sh` defaults it on, so the unit sets
+`Environment=WATCH_CONFIG=false` in `~/.config/systemd/user/llama-swap.service`:
+applying `capacity-ttl.yaml` is an explicit restart, never a file write.
+
+Which leaves the etiquette the same either way: announced, between requests,
+never while a person or another agent session could be mid-request.
 
 `systemctl --user stop llama-swap` stays off the table outright: it takes away the
 model this agent answers from and nothing returns it until the unit starts again.
@@ -24,12 +25,13 @@ To free memory with no config change, unload one model instead -
 `podman stop ls-<model_id>` or `curl -X POST localhost:8080/api/models/unload/<model_id>`.
 
 1. Look at what is warm first: `podman ps --format '{{.Names}}' | grep '^ls-'`.
-   Anything resident is what the save will interrupt.
+   Anything resident is what the restart will interrupt.
 2. Edit `capacity-ttl.yaml` (`config.yaml` is a symlink to it; keep it one), then
    `./llama-swap -config config.yaml -validate` - done when it prints
    `config is valid: N model(s)` with N moved by exactly what was added.
-3. Save, then wait for `configuration reloaded` followed by `Health check passed`
-   in `curl -s localhost:8080/logs`; the box is not usable before that.
+3. `systemctl --user daemon-reload && systemctl --user restart llama-swap`, then
+   wait for the preload's `Health check passed` in `curl -s localhost:8080/logs`;
+   the box is not usable before that.
 4. Confirm the id and its alias in `/v1/models`, and commit - the history is this
    file's changelog, one commit per behaviour change, explaining the number rather
    than just the edit.
