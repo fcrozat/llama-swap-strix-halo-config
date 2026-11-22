@@ -72,6 +72,10 @@ macros:
     memlock=-1 --userns keep-id:uid=1000,gid=1000 --volume ${dir}:/models:ro
     --volume ${loom_dir}:/loom:ro --volume gufo-nix:/nix:ro --env
     GUFO_MODELS_DIR=/models --publish 127.0.0.1:${PORT}:8080
+  # bare `gufo` is on the toolbox image's PATH only, so the nix gufo is named:
+  # ${gufo_serve_llm} would exit with "executable file not found in $PATH".
+  loom_serve_llm: >-
+    /loom/gufo serve --host 0.0.0.0 --port 8080 llm
   ds41_dir: /models/DeepSeek-V4.1-Flash-1017
   ds41_q: DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M
   ds41_draft: DeepSeek-V4.1-Flash-1017-DSpark-draft-Q2K-Q4K.gguf
@@ -203,7 +207,7 @@ models:
     aliases:
       - Inkling-2-Mini
     cmd: |
-      ${loom_pod} ${loom_image} ${gufo_serve_llm} ${gufo_sessions}
+      ${loom_pod} ${loom_image} ${loom_serve_llm} ${gufo_sessions}
       --context 131072 --max-tokens 4096 --model inkling-2-mini-loom
     cmdStop: podman stop ls-loom-inkling
     checkEndpoint: /ready
