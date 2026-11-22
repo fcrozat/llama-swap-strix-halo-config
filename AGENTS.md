@@ -12,9 +12,12 @@ itself, rootless as uid 1000, each published on 127.0.0.1 so nothing bypasses it
 model container and starts it again - any save, even one that edits only a
 comment, even for a model whose entry did not change. Observed: a save recreated
 `ls-gufo-flash-next` and the cold reload took 61 s, with every client that wanted
-that model waiting behind it. `run-llama-swap.sh` defaults it on, so the unit sets
-`Environment=WATCH_CONFIG=false` in `~/.config/systemd/user/llama-swap.service`:
-applying `capacity-ttl.yaml` is an explicit restart, never a file write.
+that model waiting behind it. `run-llama-swap.sh` defaults it on, so `llama-swap.service` sets
+`Environment=WATCH_CONFIG=false`. That file is tracked here and symlinked to
+`~/.config/systemd/user/llama-swap.service`, so editing it edits the service -
+`systemd-analyze --user verify llama-swap.service` checks it and `daemon-reload`
+makes systemd read it, though the running unit keeps its old settings until it
+restarts. Applying `capacity-ttl.yaml` is an explicit restart, never a file write.
 
 Which leaves the etiquette the same either way: announced, between requests,
 never while a person or another agent session could be mid-request.

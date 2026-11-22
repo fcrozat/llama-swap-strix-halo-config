@@ -1,0 +1,58 @@
+# llama-swap on :8080, as $USER (rootless), replacing the rootful gufo quadlet.
+#
+# The tracked copy at ~/strix/launchers/llama-swap.service is the source of truth
+# and the unit path below is a symlink to it, so editing the file in the repo IS
+# editing the service:
+#   ln -s ~/strix/launchers/llama-swap.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload      # systemd reads it; the running unit keeps
+#                                       # its old settings until it restarts
+# Validate with: systemd-analyze --user verify llama-swap.service
+#
+#   sudo loginctl enable-linger $USER       # start without a login session
+#   sudo systemctl disable --now gufo        # old rootful quadlet, frees :8080
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now llama-swap
+#
+# LISTEN=:8080 is what makes this equivalent to the old gufo unit: clients keep
+# using :8080 and just say "gufo" (or gufo-27b / gufo-deepseek / hipfire-* /
+# qwen3.8-27b ...) instead of reaching one engine directly. Model containers are
+# published on 127.0.0.1 only, so nothing bypasses llama-swap.
+#
+# Every engine container (llama-server / gufo / hipfire) is started by llama-swap
+# with `podman run`, so they all inherit this unit: rootless, uid 1000, this
+# slice. There is nothing else to convert.
+#
+# Do NOT set LimitMEMLOCK here unless you also raise the hard limit for the user
+# manager, otherwise the unit fails to start:
+#   echo -e '[Service]\nLimitMEMLOCK=infinity' | sudo tee /etc/systemd/system/user@.service.d/limits.conf
+#   sudo systemctl daemon-reexec && systemctl --user daemon-reload && loginctl terminate-user $USER
+# rocBLDA works without it (the rootless launchers do), so it stays off.
+
+[Unit]
+Description=llama-swap (on-demand GGUF engines, rootless)
+Documentation=https://github.com/orbitalquark/llama-swap
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+Environment=LISTEN=:8080
+# config and binary default to ~/strix/launchers/{config.yaml,llama-swap}; set
+# CONFIG= / LLAMA_SWAP= here (or in the script) to move them.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# A config save does not apply quietly: -watch-config stops the resident model
+# container and starts it again, on any save including a comment-only edit, which
+# cost a 61 s cold reload of ls-gufo-flash-next with every client waiting behind
+# it. So applying capacity-ttl.yaml here is an explicit restart, not a file write.
+# run-llama-swap.sh defaults WATCH_CONFIG=true; this is what turns it off.
+Environment=WATCH_CONFIG=false
+ExecStart=%h/strix/launchers/run-llama-swap.sh
+Restart=on-failure
+RestartSec=5
+# a 125 GB model takes a while to unload cleanly; containers live in their own
+# podman-*.scope units so this only waits for llama-swap itself
+TimeoutStopSec=180
+KillMode=control-group
+
+[Install]
+WantedBy=default.target
