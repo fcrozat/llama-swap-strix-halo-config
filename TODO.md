@@ -65,8 +65,8 @@ design, and preload says flash-next should be the warm default.
 `loom/README.md` exist on one disk. The publish decision is made; only the
 remote is missing.
 
-Audited before publishing, every blob in the history rather than just HEAD: no
-credentials, no emails, no `user:pass@` URLs, no private key material, and the
+Audited before publishing, every blob in the history rather than just HEAD (the
+procedure and the checks are `PUBLISHING.md`): no credentials, no emails, no `user:pass@` URLs, no private key material, and the
 only addresses anywhere are `0.0.0.0` and `127.0.0.1`. Nothing names private
 infrastructure either - `ghcr.io/gufo-org/toolboxes/gufo-runtime`,
 `ghcr.io/yamz-labs/kyojin-glm` and the `kyuz0` toolbox all pull anonymously and
@@ -83,7 +83,7 @@ local account name out of every blob and every commit message: config paths read
 `${env.HOME}`, which llama-swap substitutes for real, and the comments address
 the reader as `$USER`.
 
-What a clone gets is 17 files and 83 KiB: no binaries, no weights, no upstream
+What a clone gets is 18 files and 90 KiB: no binaries, no weights, no upstream
 docs, and no local account name anywhere in the object store. Two safety bundles
 sit in the home directory, both taken before the scrub, so both still carry the
 name - `launchers-pre-rewrite.bundle` additionally carries the upstream docs.

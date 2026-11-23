@@ -47,8 +47,8 @@ not implemented - it 404s for good ids too, so never treat it as a health check.
 `capacity-ttl.yaml` is the live config (`config.yaml` is a symlink to it),
 `capacity-old.yaml` and `simple-routing.yaml` are earlier layouts kept for
 reference, and `run-*.sh` (each documents itself in its header), `nix-loom-*.sh`,
-`loom/`, `index.md` and `TODO.md` are ours. The public intro is `index.md`, not
-`README.md`, because the tarball claims that name - see below.
+`loom/`, `index.md`, `TODO.md` and `PUBLISHING.md` are ours. The public intro is
+`index.md`, not `README.md`, because the tarball claims that name - see below.
 
 Nothing upstream is tracked. A release tarball drops `README.md`, `CHANGELOG.md`,
 `LICENSE.md` and a `changelog/` tree; `.gitignore` keeps those out beside the
@@ -61,6 +61,25 @@ Upstream's config documentation is its own repo README. The live config and
 names against (`capacity-old.yaml` is a superseded snapshot, left as it was):
 
     # yaml-language-server: $schema=https://raw.githubusercontent.com/mostlygeek/llama-swap/refs/heads/main/config-schema.json
+
+## Publishable history
+
+This tree and its whole history are meant to be cloned by strangers, so write
+every commit for that reader. Config paths take `${env.HOME}` (or the `home`
+macro built on it) and prose takes `$USER` or `~`, which keeps the local account
+name out of every blob. A commit message names a thing rather than quoting it -
+"the literal absolute path", and a probe's output as the claim it supported.
+The author identity is the one personal thing kept deliberately, on every
+commit: it is a decision, so it stays.
+
+Anything already committed is a history problem rather than an edit: audit the
+object store, then rewrite it. `PUBLISHING.md` is that runbook - what clean
+means, the five surfaces to grep, the `filter-repo` traps (`--replace-text`
+reaches blobs only; binaries are skipped whole), and why the tip needs
+hand-writing after a substitution. Every hash changes, so a first push is a
+one-way door, so audit again before pushing. `TODO.md` §3 records what the last
+audit found and that no remote is configured yet; `PUBLISHING.md` ends with the
+`gh repo create` line.
 
 ## Memory: measured, not guessed
 
