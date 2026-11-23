@@ -118,19 +118,34 @@ environment, substituted before macro expansion; an unknown `${MACRO}` or an
 unset `${env.VAR}` is a load error rather than an empty string, which is why the
 account path is a `home` macro and not a bare `${HOME}`.
 
-Two traps around gufo:
+Traps around gufo:
 
 - After `podman pull`, run `./run-gufo.sh ext update`. A module compiled for
   another gufo build shows `needs update` and is skipped, so `gufo-ds41` fails
-  to load. `run-gufo.sh` documents the extension workflow.
-- Loom (Inkling) is not in the extension registry and needs extension API
-  0.3.35 while the toolbox image is on 0.3.20 - hence the Nix-built gufo in the
-  `gufo-nix` volume and `${loom_serve_llm}` naming `/loom/gufo` (bare `gufo` is
-  not on that image's PATH). `loom/README.md` rebuilds it in ~3 minutes and
-  re-points the symlinks (local artifacts, not tracked); the
-  config needs no change. Only `loom-inkling` runs
-  that way: `Inkling-2-Mini` itself is served by the `inkling2` module, which is
-  in the registry, built for the toolbox image's API, and needs no Nix.
+  to load. Nothing announces the skip to a client: `/ready` still answers 200
+  and the server only logs `extension <name> is not built for this gufo`, so
+  read that log after a pull rather than trusting the health check. The update
+  needs no window - store only, no GPU, no port, and a running server keeps the
+  set it already loaded. `gufo --version` names the build and the extension API
+  it speaks; read both before trusting a module list.
+- A module the image cannot build at all is worse than a stale one, and
+  `ext list` says so in its own words ("no reviewed release supports linux and
+  extension API x.y.z") rather than as `needs update`. Read the whole list after
+  an upgrade, not just the rows belonging to installed modules.
+- Loom (Inkling) is still not in the reviewed registry, so it is a git pin, not
+  `ext install loom` - that half of why it runs a Nix-built gufo in the
+  `gufo-nix` volume stands. The other half does not: the extension asks for
+  API `>= 0.3.35`, this image speaks more, and it carries
+  `libloom_text_embed.so` plus a `loom-runtime` store path with the header and
+  cmake package `CMAKE_PREFIX_PATH` wants. Its built-in loom is one release
+  behind the one that added Inkling-2-Mini, which is why the image answers
+  `no loaded extension offers it` for `inkling-2-mini-loom` while the Nix
+  binary serves it. `${loom_serve_llm}` names `/loom/gufo` because bare `gufo`
+  is on the toolbox image's PATH only, and `loom/README.md` rebuilds it in ~3
+  minutes and re-points the symlinks (local artifacts, not tracked). Only
+  `loom-inkling` runs that way: `Inkling-2-Mini` itself is served by the
+  `inkling2` module, which is in the registry and needs no Nix. `TODO.md` §6
+  holds the probe that closes this gap and what it left untested.
 
 hipfire runs upstream's own image: `ghcr.io/warpfront/hipfire`, `full` variant
 (ROCm 10.1.0-3, kernel packs for gfx1100/gfx1151/gfx1201 baked in), release tag

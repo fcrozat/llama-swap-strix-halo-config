@@ -218,3 +218,61 @@ Also open on this engine:
 - `qwen3.8:flash-next-mq4-xts-symtrunk`, 66.0 GiB per `fit`, is a rung 0.4.2 did
   not offer. At 66000 it is the first flash-next that could share the 118000
   pool with anything, which is the question section 2 asks about the gufo entry.
+
+## 6. Retire the Nix-built gufo, now that the image can host the loom module
+
+`ghcr.io/gufo-org/toolboxes/gufo-runtime:latest` is gufo 0.36.0 (`4a7d8c6`) on
+extension API 0.3.42. Both installed modules had been skipped since that pull:
+`gufo serve` logged `extension deepseek41flash is not built for this gufo` and
+the same for `inkling2` while `/ready` kept answering 200.
+`./run-gufo.sh ext update` rebuilt both (`Updated deepseek41flash 0.3.0`,
+`Updated inkling2 0.1.2`) and neither offered a newer reviewed release. Every
+`gufo serve` flag the six gufo entries pass still parses - the misses against
+`serve llm --help` were podman flags plus `--stream-experts`, which is a
+`deepseek41flash` option rather than a core one.
+
+The Nix build (the 5.9 GiB `gufo-nix` volume, `nix-loom-build.sh`,
+`nix-loom-gufo.sh` and the two `loom/` symlinks) exists because loom wanted API
+0.3.35 and the image had 0.3.20. Measured against a scratch store
+(`EXT_DIR=/tmp/gufo-ext-probe`, so the live store never saw it):
+
+- The image ships the dependency: `libloom_text_embed.so`, plus a
+  `loom-runtime-0.2.0` store path holding `loom_text_embed.h`,
+  `loom_text_embed.cmake` and a pkg-config file - the `CMAKE_PREFIX_PATH`
+  upstream asks for.
+- `gufo extension install
+  https://github.com/loom-fun/loom-gufo-extension@v0.3.7 --replace-builtin
+  --yes` built and installed in under 90 s; v0.3.7 resolves to `e98bed99`, the
+  `inkling-0.3.7` merge.
+- `--version` then reports `loom 0.3.7 (module:....so)` where the built-in
+  `0.3.6` was, and `model list` says `inkling-2-mini-loom  18.1 GB  installed
+  (package, checkpoint)` - the line the Nix gufo gives, against the image's
+  `no loaded extension offers it`. That is the whole remaining gap: upstream
+  added Inkling-2-Mini in loom 0.3.7, the image bundles 0.3.6.
+
+Still open, the first of which costs an eviction:
+
+- Whether it serves. `model list` proves the extension offers the package, not
+  that a 70000 load works, and `gufo-flash-next` at 112000 cannot coexist with
+  it: whoever runs the test loses the model they are typing on.
+- Whether `seccomp=unconfined` is still needed. Only `loom_pod` passes it,
+  `gufo_pod` does not, and the claim predates this image. Serve once with, then
+  once without.
+- `run-gufo.sh` does not pass `CMAKE_PREFIX_PATH`, and upstream wants it for
+  `ext update` after a gufo upgrade as well. The path is a Nix store hash that
+  changes with every image build, so the script has to look it up inside the
+  image (`ls -d /nix/store/*loom-runtime*`) instead of hardcoding it.
+- Loom is still not in the reviewed registry - nine modules:
+  deepseek41flash, diffusion_gemma, flint, gemma4, inkling2, lfm3, nemotron,
+  strycast_qwen35moe, upscale - so it stays a git pin and `ext update` will
+  rebuild it but never move it forward.
+- `strycast_qwen35moe` and `upscale` cannot be installed on this API at all:
+  "no reviewed release supports linux and extension API 0.3.42". Nothing here
+  uses either; it matters only if the Qwen3.6-35B-A3B / Ornith 1.5 122B
+  kernels are ever wanted.
+- On adoption: point `loom-inkling` at `${gufo_pod} ${gufo_image}
+  ${gufo_serve_llm}` with `--model inkling-2-mini-loom`, keep
+  `--security-opt seccomp=unconfined` until the test above says otherwise, then
+  drop the volume, both nix scripts, `loom_pod`, `loom_serve_llm` and
+  `loom/README.md`. The scratch store is 8.7 MB and can be deleted; the live
+  store still holds only `deepseek41flash` and `inkling2`.

@@ -67,11 +67,16 @@ macros:
     ${gufo_pod} ${gufo_image} ${gufo_serve_llm} --sessions 2
     --max-pending-per-client 4 ${gufo_serve_tail}
   # Loom (github.com/loom-fun/loom-gufo-extension) runs a package's own
-  # kernels through libloom_text_embed. It needs extension API 0.3.35, which the
-  # toolbox image (0.3.20) does not have, so this gufo is built by Nix into the
-  # gufo-nix volume; loom/gufo symlinks it (see loom/README.md). gufo_pod is not
-  # reusable: Loom's GPU memory reservation needs seccomp=unconfined, and the
-  # module is compiled in, so mounting ${gufo_ext} would only invite a mismatch.
+  # kernels through libloom_text_embed, so this gufo is built by Nix into the
+  # gufo-nix volume and loom/gufo symlinks it (see loom/README.md). The reason
+  # originally recorded here - extension API 0.3.35, which the toolbox image
+  # did not have - is stale on both counts now: the image speaks a newer API
+  # and ships the loom library, but its built-in loom predates Inkling-2-Mini
+  # support, so this binary is still the one that serves the package.
+  # TODO.md §6 measured the module install that would replace it and left the
+  # serving test open. gufo_pod is not usable for it yet either: only loom_pod
+  # passes seccomp=unconfined, which Loom's GPU memory reservation is
+  # documented to need - untested against the current image.
   loom_dir: ${home}/strix/launchers/loom
   loom_image: docker.io/nixos/nix:latest
   loom_pod: >-

@@ -14,5 +14,10 @@ that use them.
 
 Both symlinks point into /nix: they dangle on the host and resolve inside the
 container, which mounts the gufo-nix volume at /nix. The loom module is compiled
-into this gufo (extension API 0.3.35); the toolbox image is still on 0.3.20,
-which is why these models do not use `gufo_pod`.
+into this gufo (extension API 0.3.35). That is no longer the blocker it was:
+the toolbox image now speaks a newer API and ships `libloom_text_embed.so`
+itself. It is still what serves these models, though, because its built-in
+loom predates Inkling-2-Mini support, and only `loom_pod` passes the
+`seccomp=unconfined` the GPU memory reservation is documented to need.
+`TODO.md` §6 records the module install measured to close that gap, and the
+load test that has not been run.
