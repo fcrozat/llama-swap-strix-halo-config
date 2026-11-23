@@ -61,21 +61,29 @@ design, and preload says flash-next should be the warm default.
 
 ## 3. Give the repo a remote
 
-`main` is local-only (`cbb4105`, `1565c9a`, `88dfd1a` and whatever follows) with
-no remote configured, so the recovery notes in `loom/README.md` exist on one
-disk.
+`main` is local-only with no remote configured, so the recovery notes in
+`loom/README.md` exist on one disk. The publish decision is made; only the
+remote is missing.
 
-Decide what is publishable before it leaves the box:
+Audited before publishing, every blob in the history rather than just HEAD: no
+credentials, no emails, no `user:pass@` URLs, no private key material, and the
+only addresses anywhere are `0.0.0.0` and `127.0.0.1`. Nothing names private
+infrastructure either - `ghcr.io/gufo-org/toolboxes/gufo-runtime`,
+`ghcr.io/yamz-labs/kyojin-glm` and the `kyuz0` toolbox all pull anonymously and
+this box holds no registry credentials at all. Publishing with the real author
+identity, deliberately.
 
-- `capacity-ttl.yaml` carries local absolute paths, ports, exact model filenames
-  and the strix sizing notes.
-- `loom/README.md`, `nix-loom-build.sh` and `nix-loom-gufo.sh` are host-agnostic
-  and would be useful to anyone building gufo + Loom on Nix.
+History rewritten first, with every commit kept: llama-swap's own `README.md`,
+`CHANGELOG.md` and `LICENSE.md` are out of it, the first two because they were
+tracked before being gitignored and the third because its MIT text carries
+upstream's copyright, not this tree's. Every hash changed; the old history is in
+`~/launchers-pre-rewrite.bundle`. The `loom/gufo` symlinks still appear in the
+older commits - they point at a `/nix/store` output, which is a build id and not
+a secret.
 
-Options: one private remote for everything, or split the reusable Nix/Loom part
-into a public repo and keep the sizing file private. Either way, re-read the diff
-for anything sensitive first - nothing was added deliberately, but the config is
-host-specific by nature.
+What a clone gets is 16 files and 220 KiB: no binaries, no weights, no upstream
+docs. The local account name survives in `capacity-old.yaml` and a handful of
+comments; the live config reads `${env.HOME}` and carries none.
 
 ## 4. What the first inkling2 load left open
 
