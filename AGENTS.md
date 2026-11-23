@@ -123,12 +123,27 @@ Two traps around gufo:
   that way: `Inkling-2-Mini` itself is served by the `inkling2` module, which is
   in the registry, built for the toolbox image's API, and needs no Nix.
 
+hipfire runs upstream's own image: `ghcr.io/warpfront/hipfire`, `full` variant
+(ROCm 10.1.0-3, kernel packs for gfx1100/gfx1151/gfx1201 baked in), release tag
+pinned in `hipfire_image`. A tag does not re-pull itself, so a bump is edit +
+`podman pull` + restart. It serves as uid 1000 with `HOME=/home/hipfire`, so the
+model store mounts at `/home/hipfire/.hipfire/models` and that bind needs `,z`:
+the store is shared, and a `:Z` (private) run labels it with one container's
+SELinux MCS categories - every later container then reads `failed to list model
+directory: Permission denied (os error 13)` before a model is even chosen.
+
 ## Testing a model
 
 Request it through llama-swap so the swap is exercised too, and take throughput
 from gufo's `usage` fields (`completion_tokens_per_second`, `prefill_ms`), not
 from curl's wall time: the first request includes the container start and load
 (10-20 s for the big ones).
+
+Ask the engine before paying for a swap. hipfire answers without touching the
+pool: `hipfire list` (does the store read, which tag is each file) and
+`hipfire fit <tag>` (installed, size, whether it fits, which route) take well
+under a minute and load nothing - with 8.7 GiB free, `fit` on flash-next said
+"installed, 116.7 GiB" and "DOES NOT FIT", which was the whole answer.
 
 Give thinking models headroom - `max_tokens` near 1000 or more. Asked for 220,
 Inkling spent 218 of them on reasoning and returned empty `content`.

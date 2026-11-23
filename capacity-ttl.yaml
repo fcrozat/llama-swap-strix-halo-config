@@ -89,9 +89,28 @@ macros:
   ds41_draft: DeepSeek-V4.1-Flash-1017-DSpark-draft-Q2K-Q4K.gguf
   hipfire_cache: ${home}/hipfire-kcache
   hipfire_dir: /var/lib/models/hipfire
-  hipfire_image: localhost/hipfire:latest
-  hipfire_run: |
-    podman run --rm --replace --name ls-${MODEL_ID} --device /dev/dri --device /dev/kfd --device /dev/accel/accel0 --group-add keep-groups --security-opt seccomp=unconfined --ulimit memlock=-1:-1 --env HIPFIRE_QWEN4_NPU_TRUNK=auto --volume ${hipfire_dir}:/root/.hipfire/models:ro --volume ${hipfire_cache}:/var/cache/hipfire:z --publish 127.0.0.1:${PORT}:11435 ${hipfire_image}
+  # Upstream's own image: ghcr.io/warpfront/hipfire, `full` variant (labels
+  # dev.hipfire.variant=full, rocm=10.1.0-3, gpu-arches include gfx1151), so the
+  # kernel packs are baked in and nothing is compiled at container start. Pinned
+  # to a release tag - a tag does not re-pull itself, so a bump is: edit, pull,
+  # restart. `:latest` is the same variant, floating.
+  hipfire_image: ghcr.io/warpfront/hipfire:0.4.7
+  # 0.4.x serves as uid 1000 with HOME=/home/hipfire (the local build it
+  # replaces ran as root, HOME=/root), so the store mounts under /home/hipfire -
+  # and the entrypoint's own rootless probe reads $HIPFIRE_HOME/models to decide
+  # whether to drop privileges, so a wrong mount point costs more than a miss.
+  # The `,z` is load-bearing: a `:Z` run labels the store
+  # container_file_t:s0:cNNN,cMMM and every other container is then denied,
+  # which surfaces as `failed to list model directory: Permission denied (os
+  # error 13)` before a model is even chosen. `:z` keeps it shared.
+  hipfire_run: >-
+    podman run --rm --replace --name ls-${MODEL_ID} --device /dev/dri
+    --device /dev/kfd --device /dev/accel/accel0 --group-add keep-groups
+    --security-opt seccomp=unconfined --ulimit memlock=-1:-1
+    --env HIPFIRE_QWEN4_NPU_TRUNK=auto --volume
+    ${hipfire_dir}:/home/hipfire/.hipfire/models:ro,z --volume
+    ${hipfire_cache}:/var/cache/hipfire:z --publish 127.0.0.1:${PORT}:11435
+    ${hipfire_image}
 
 routing:
   router:

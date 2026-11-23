@@ -41,6 +41,11 @@ systemctl --user daemon-reload && systemctl --user restart llama-swap
 curl -s localhost:8080/logs                         # wait for Health check passed
 ```
 
+hipfire runs upstream's own image - `ghcr.io/warpfront/hipfire`, release tag
+pinned in `hipfire_image`, kernel packs for gfx1151 baked in - so `podman pull`
+is the whole install step, and `./run-hipfire.sh --list` prints the tags that
+image knows.
+
 Gufo models need their modules installed (`./run-gufo.sh ext install <name>`).
 The Nix-built gufo that `loom-inkling` runs is built by `loom/README.md`, about
 three minutes; the `loom/gufo` symlinks are local build artifacts and are not in

@@ -84,7 +84,8 @@ local account name out of every blob and every commit message: config paths read
 `${env.HOME}`, which llama-swap substitutes for real, and the comments address
 the reader as `$USER`.
 
-What a clone gets is 18 files and 91 KiB: no binaries, no weights, no upstream
+What a clone gets is 18 files and 95 KiB (the `config.yaml` symlink counted as
+a link, not twice as its target): no binaries, no weights, no upstream
 docs, and no local account name anywhere in the object store. Two safety bundles
 sit in the home directory, both taken before the scrub, so both still carry the
 name - `launchers-pre-rewrite.bundle` additionally carries the upstream docs.
@@ -117,3 +118,28 @@ Also open on that entry:
   Unsloth's guide names no effort level, so nothing changed without the
   measurement: same prompt at xhigh and at high, compare reasoning length and
   whether the answer ever differs.
+
+## 5. What the hipfire image switch left open
+
+The four `hipfire-*` entries now run upstream's `ghcr.io/warpfront/hipfire:0.4.7`
+in place of a local build of 0.4.2+patch.1. Verified without loading a model,
+because the box had 8.7 GiB free and gufo-flash-next resident as every switch's
+eviction candidate: the store reads, all four served tags resolve to files
+already on disk (`fit` calls flash-next "installed, 116.7 GiB" - 0.4.7 still
+honours the monolithic files the older build pulled), gfx1151 kernel packs are
+baked in, and `serve <tag> 0.0.0.0:11435` still parses.
+
+Not verified: a completion, the NPU trunk route, and what 0.4.7 actually holds.
+`hipfire-4b` at 8000 is the cheapest way to find out, and 8000 is a guess like
+the rest of section 1.
+
+Also open on this engine:
+
+- `${env.HOME}/hipfire-kcache` is mounted but `$HIPFIRE_HOME` is not, and the
+  containers are `--rm`, so hipfire rebuilds its own state at every start - a
+  `fit` of flash-next wrote a 429 MiB PLE hot-store index under it. Upstream
+  mounts a `hipfire-config` volume for exactly that. Worth a bind only if the
+  rebuild shows up in the cold-start time; measure before adding a mount.
+- `qwen3.8:flash-next-mq4-xts-symtrunk`, 66.0 GiB per `fit`, is a rung 0.4.2 did
+  not offer. At 66000 it is the first flash-next that could share the 118000
+  pool with anything, which is the question section 2 asks about the gufo entry.
