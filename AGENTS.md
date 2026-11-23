@@ -47,11 +47,15 @@ not implemented - it 404s for good ids too, so never treat it as a health check.
 `capacity-ttl.yaml` is the live config (`config.yaml` is a symlink to it),
 `capacity-old.yaml` and `simple-routing.yaml` are earlier layouts kept for
 reference, and `run-*.sh` (each documents itself in its header), `nix-loom-*.sh`,
-`loom/` and `TODO.md` are ours.
+`loom/`, `index.md` and `TODO.md` are ours. The public intro is `index.md`, not
+`README.md`, because the tarball claims that name - see below.
 
-Nothing upstream is tracked. A release tarball drops `README.md`, `CHANGELOG.md`
-and a `changelog/` tree; `.gitignore` keeps those out beside the `llama-swap` /
-`llama-swap.v*` pins and `*.tar.gz` - downloads, not source. `LICENSE.md` stays.
+Nothing upstream is tracked. A release tarball drops `README.md`, `CHANGELOG.md`,
+`LICENSE.md` and a `changelog/` tree; `.gitignore` keeps those out beside the
+`llama-swap` / `llama-swap.v*` pins and `*.tar.gz` - downloads, not source.
+`LICENSE.md` is llama-swap's own MIT file carrying its own copyright holder, so
+it is ignored with the rest of the tarball's output rather than read as this
+tree's license; this tree publishes none.
 Upstream's config documentation is its own repo README. The live config and
 `simple-routing.yaml` carry the schema modeline an editor resolves keys and pool
 names against (`capacity-old.yaml` is a superseded snapshot, left as it was):
@@ -78,7 +82,10 @@ Four run macro families (`run`, `gufo_run` / `gufo_ds41_run`, `hipfire_run`,
 `loom_pod` + `loom_serve_llm`) with ports and mount sets that differ enough that
 a new entry must copy its engine's macros rather than the nearest neighbour's.
 llama-swap expands macros in file order, so the `gufo_*` fragments stay above the
-run macros that use them.
+run macros that use them. `${env.VAR}` is its own syntax for its process
+environment, substituted before macro expansion; an unknown `${MACRO}` or an
+unset `${env.VAR}` is a load error rather than an empty string, which is why the
+account path is a `home` macro and not a bare `${HOME}`.
 
 Two traps around gufo:
 
@@ -89,7 +96,8 @@ Two traps around gufo:
   0.3.35 while the toolbox image is on 0.3.20 - hence the Nix-built gufo in the
   `gufo-nix` volume and `${loom_serve_llm}` naming `/loom/gufo` (bare `gufo` is
   not on that image's PATH). `loom/README.md` rebuilds it in ~3 minutes and
-  re-points the symlinks; the config needs no change. Only `loom-inkling` runs
+  re-points the symlinks (local artifacts, not tracked); the
+  config needs no change. Only `loom-inkling` runs
   that way: `Inkling-2-Mini` itself is served by the `inkling2` module, which is
   in the registry, built for the toolbox image's API, and needs no Nix.
 
