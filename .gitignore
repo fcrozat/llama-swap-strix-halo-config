@@ -19,6 +19,13 @@
 /CHANGELOG.md
 /LICENSE.md
 
+# Loom's gufo, built by ./nix-loom-build.sh and pointed at the resulting
+# /nix/store path by ./nix-loom-gufo.sh. Absolute symlinks into a store path that
+# only exists on this box, so a clone gets two dead links and no hint. Build them
+# yourself; loom/README.md walks through it.
+/loom/gufo
+/loom/gufo-server
+
 # runtime droppings
 *.log
 *.pid
