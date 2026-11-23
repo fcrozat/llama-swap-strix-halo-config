@@ -30,7 +30,8 @@ To free memory with no config change, unload one model instead -
 1. Look at what is warm first: `podman ps --format '{{.Names}}' | grep '^ls-'`.
    Anything resident is what the restart will interrupt.
 2. Edit `capacity-ttl.yaml` (`config.yaml` is a symlink to it; keep it one), then
-   `./llama-swap -config config.yaml -validate` - done when it prints
+   validate with the package binary - `/usr/bin/llama-swap` on the host,
+   `/run/host/usr/bin/llama-swap` inside a distrobox - done when it prints
    `config is valid: N model(s)` with N moved by exactly what was added.
 3. `systemctl --user daemon-reload && systemctl --user restart llama-swap`, then
    wait for the preload's `Health check passed` in `curl -s localhost:8080/logs`;
@@ -39,23 +40,25 @@ To free memory with no config change, unload one model instead -
    file's changelog, one commit per behaviour change, explaining the number rather
    than just the edit.
 
-Health is `/health` (swap) and `/ready` (a loaded engine). `/v1/models/{id}` is
-not implemented - it 404s for good ids too, so never treat it as a health check.
+Health is `/health` (swap) and `/ready` (a loaded engine). `/api/version` gives
+the build actually running - `version`, `commit`, `build_date` - which is how a
+package upgrade is confirmed. `/v1/models/{id}` is not implemented - it 404s for
+good ids too, so never treat it as a health check.
 
 ## Ours vs vendored
 
 `capacity-ttl.yaml` is the live config (`config.yaml` is a symlink to it),
 `capacity-old.yaml` and `simple-routing.yaml` are earlier layouts kept for
 reference, and `run-*.sh` (each documents itself in its header), `nix-loom-*.sh`,
-`loom/`, `index.md`, `TODO.md` and `PUBLISHING.md` are ours. The public intro is
-`index.md`, not `README.md`, because the tarball claims that name - see below.
+`loom/`, `README.md`, `TODO.md` and `PUBLISHING.md` are ours; `README.md` is the
+public intro the front page renders.
 
-Nothing upstream is tracked. A release tarball drops `README.md`, `CHANGELOG.md`,
-`LICENSE.md` and a `changelog/` tree; `.gitignore` keeps those out beside the
-`llama-swap` / `llama-swap.v*` pins and `*.tar.gz` - downloads, not source.
-`LICENSE.md` is llama-swap's own MIT file carrying its own copyright holder, so
-it is ignored with the rest of the tarball's output rather than read as this
-tree's license; this tree publishes none.
+Nothing upstream is vendored, because nothing upstream arrives here: llama-swap
+is a distro package. An engine upgrade is a package
+transaction plus the announced restart above, rollback is the distro's own
+snapshot tool, and neither is this repo's business - neither leaves a file in
+this directory for `.gitignore` to mind. This tree publishes no license file:
+upstream's MIT text was never ours to claim.
 Upstream's config documentation is its own repo README. The live config and
 `simple-routing.yaml` carry the schema modeline an editor resolves keys and pool
 names against (`capacity-old.yaml` is a superseded snapshot, left as it was):

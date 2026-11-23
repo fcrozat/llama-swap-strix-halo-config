@@ -1,23 +1,7 @@
-# llama-swap binary plus the pinned copies kept for rollback (v265 .. v271):
-# ~46 MB each, per-release downloads or build output. run-llama-swap.sh takes
-# LLAMA_SWAP=/path/to/llama-swap when it lives elsewhere.
-/llama-swap
-/llama-swap.v*
-
-# release archives unpacked into the copies above
-/*.tar.gz
-
-# upstream llama-swap changelog package (Go source + the v*.md notes it embeds):
-# vendored, and nothing here builds it - no go.mod, no importer
-/changelog/
-
-# the tarball's own upstream docs: extracted beside the binary, nothing of ours.
-# LICENSE.md is llama-swap's own MIT text and carries Benson Wong's copyright, so
-# it belongs upstream: this repo publishes its config and launchers, not a
-# license that could be read as claiming someone else's work as ours.
-/README.md
-/CHANGELOG.md
-/LICENSE.md
+# Nothing to ignore for llama-swap itself: it is a distro package living at
+# /usr/bin/llama-swap, so no download, binary or upstream doc lands in this
+# directory any more. The tarball-era rules went with the tarball, and README.md
+# at the root is ours with no name to dodge.
 
 # Loom's gufo, built by ./nix-loom-build.sh and pointed at the resulting
 # /nix/store path by ./nix-loom-gufo.sh. Absolute symlinks into a store path that

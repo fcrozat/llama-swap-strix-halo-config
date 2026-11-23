@@ -8,15 +8,15 @@ that have not happened yet are in `AGENTS.md`, section "Publishable history".
 
 ## What counts as clean
 
-No account name, credential, private host or upstream tarball file in **any
+No account name, credential, private host or vendored upstream file in **any
 commit**. A clean HEAD means nothing: a file deleted last week still ships inside
 the packfile, so the audit runs over the object store.
 
 ## Audit
 
-Five surfaces. Match over objects rather than the working tree - the gitignored
-`llama-swap` pins make a case-insensitive grep report `cooperate` out of the Go
-runtime as a false positive.
+Five surfaces. Match over objects rather than the working tree: a working-tree
+grep also drags in whatever is untracked, and any Go binary in it reports
+`cooperate` as a false positive to a case-insensitive needle.
 
 ```bash
 N='<needle>'
@@ -43,9 +43,9 @@ exactly like a clean repo.
 
 Then pick the needle by shape rather than by substring: `grep -iw` for a bare
 name, the full `/home/<name>` for a path. A substring match fires on ordinary
-prose - `cooperate` is in the Go binaries, which is why the tree is grepped over
-objects at all, and the same word inside this file's own warning above is the
-single match a `-i` audit still reports here.
+prose - `cooperate` is in every Go binary, which is one reason the tree is
+grepped over objects at all, and the same word inside this file's own warning
+above is the single match a `-i` audit still reports here.
 
 ## Rewrite
 
@@ -65,7 +65,7 @@ each one paid for:
   removes the longer rule's last chance to match. Non-overlapping rules are
   order-free, so this only bites when a generic rule is listed first.
 - **Binary blobs are skipped outright** (a zero byte in the first 8 KiB). A
-  secret inside a `llama-swap.v*` pin or a GGUF cannot be substituted - drop the
+  secret inside a binary - a Go build, a GGUF - cannot be substituted - drop the
   path with `--invert-paths`, or the object with `--strip-blobs-with-ids`.
 - **`--message-callback` is a function body, not an expression.** It wants
   `return`, so an `A and B or C` one-liner dies with "should have a return
@@ -105,7 +105,8 @@ a follow-up commit for exactly this:
 
 Rerun the whole audit against the rewritten repo **and a fresh clone of it** -
 the clone is what a stranger gets, and it is the only check that the rewrite
-reached every ref. Then `./llama-swap -config config.yaml -validate` for
+reached every ref. Then `/run/host/usr/bin/llama-swap -config config.yaml
+-validate` (the package binary) for
 `config is valid: 18 model(s)` and `curl -s localhost:8080/health` for `OK`.
 
 `git fsck --unreachable` counts leftovers rather than leaks: an intermediate from

@@ -27,10 +27,12 @@ LISTEN=${LISTEN:-:9931}
 # reload config.yaml when it changes: a model entry then applies without a unit
 # restart, which would drop whatever model an interactive session is running on
 WATCH_CONFIG=${WATCH_CONFIG:-true}
-# the host package install - this script is run by the host unit, not from a
-# distrobox, where /usr/bin/llama-swap does not exist: from inside one, call
-# ./llama-swap -config config.yaml -validate directly. Override with
-# LLAMA_SWAP=/path/to/llama-swap
+# llama-swap is a distro package, RPM on this box (llama-swap-275-4.1 from OBS
+# home:fcrozat), and the host unit runs /usr/bin/llama-swap. A distrobox has no
+# /usr/bin/llama-swap of its own but does see the host's, so checking the config
+# from inside one is:
+#   /run/host/usr/bin/llama-swap -config config.yaml -validate
+# Override with LLAMA_SWAP=/path/to/llama-swap
 BIN=${LLAMA_SWAP:-/usr/bin/llama-swap}
 
 if [[ ! -x $BIN ]]; then

@@ -22,17 +22,21 @@ Loom via `loom_pod` + `loom_serve_llm`. 18 models route across them.
 | `nix-loom-build.sh`, `nix-loom-gufo.sh`, `loom/` | gufo built by Nix, needed only by `loom-inkling` |
 | `AGENTS.md` | orientation for an agent working in this tree |
 | `TODO.md` | open items, and which capacities still rest on a guess |
+| `PUBLISHING.md` | auditing and rewriting history before a repo becomes public |
 | `capacity-old.yaml`, `simple-routing.yaml` | earlier layouts, kept for reference |
 
 ## Setting it up somewhere else
 
+llama-swap is a distro package, not a file in this tree.
+
 `home: ${env.HOME}` is the only account-dependent value and it reads the process
 environment, so there is nothing to edit for a different user - `${dir}`
 (`/var/lib/models/llama`) and `/var/cache/gufo` are the paths that stay
-host-specific.
+host-specific. From inside a distrobox the package is not at `/usr/bin` but the
+host's copy is, so name it: `/run/host/usr/bin/llama-swap`.
 
 ```sh
-./llama-swap -config config.yaml -validate          # 18 models, or it refuses
+llama-swap -config config.yaml -validate            # 18 models, or it refuses
 systemctl --user daemon-reload && systemctl --user restart llama-swap
 curl -s localhost:8080/logs                         # wait for Health check passed
 ```
@@ -65,18 +69,15 @@ real image that gets answered correctly - not with a field in `/v1/models`.
 **Names have three meanings.** The engine's install id, `useModelName` sent
 upstream, and the `aliases` clients may send. Request the alias.
 
-Health is `/health` (swap) and `/ready` (a loaded engine). `/v1/models/{id}` is
-not implemented and 404s for good ids, so never use it as a health check.
+Health is `/health` (swap) and `/ready` (a loaded engine). `/api/version` reports
+which llama-swap build is live, so it is how a package upgrade is confirmed.
+`/v1/models/{id}` is not implemented and 404s for good ids, so never use it as a
+health check.
 
 ## Not in this repo
 
-The `llama-swap` binary and its pinned rollback copies, the release tarballs,
-and llama-swap's own `README.md` / `CHANGELOG.md` / `LICENSE.md` - that last one
-is upstream's MIT file with its own copyright holder, not a license for this
-tree. llama-swap is [mostlygeek/llama-swap](https://github.com/mostlygeek/llama-swap).
-Model weights live outside the repo too, under `${dir}`.
+llama-swap itself - it is the package above, and nothing unpacks into this
+directory. Model weights stay under `${dir}`. `loom/gufo` and `loom/gufo-server`
+are local build artifacts: absolute symlinks into a `/nix/store` path that only
+exists on this box, which is why `loom/README.md` rebuilds them after a clone.
 
-There is no `README.md` here on purpose: the release tarball unpacks
-llama-swap's `README.md` and `CHANGELOG.md` beside the binary, into this same
-directory, so those two names stay gitignored and this file takes the other name
-GitHub renders.
