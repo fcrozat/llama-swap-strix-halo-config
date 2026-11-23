@@ -132,6 +132,12 @@ the store is shared, and a `:Z` (private) run labels it with one container's
 SELinux MCS categories - every later container then reads `failed to list model
 directory: Permission denied (os error 13)` before a model is even chosen.
 
+"Baked in" means the kernels ship, not that a route is chosen: 0.4.7 loads
+`qwen3.5-4b` here as `no closed route plan (UnsupportedRoute("model arch 5 on
+gfx1151 has no closed route"))` on a predicted fallback plan, with 42 `unplanned
+kernel ... bound lazily` warnings after ready. The load lines say which plan a
+tag took - read them before quoting that tag's speed.
+
 ## Testing a model
 
 Request it through llama-swap so the swap is exercised too, and take throughput
@@ -147,6 +153,16 @@ under a minute and load nothing - with 8.7 GiB free, `fit` on flash-next said
 
 Give thinking models headroom - `max_tokens` near 1000 or more. Asked for 220,
 Inkling spent 218 of them on reasoning and returned empty `content`.
+
+Hipfire's Qwen tags are that trap with a documented fix: `max_tokens` covers the
+`<think>` span, so 64 and 400 both came back `content: ""`,
+`finish_reason: "length"`, budget gone on `reasoning_content`.
+`"chat_template_kwargs": {"enable_thinking": false}` answers properly and
+llama-swap forwards it unchanged; `reasoning_effort: "low"` does not - upstream
+makes it prompt strength, never a think-token budget - and neither did the
+`"thinking": "off"` form. hipfire's `usage` has no per-second fields and its
+stream carries no `usage` at all, so throughput there is wall-clock divided by
+`completion_tokens`, unlike gufo.
 
 Capability fields lie. The inkling2 README says `/v1/models` advertises
 `input_modalities: [text, image]` once a projector is loaded; on gufo 0.35.0 no

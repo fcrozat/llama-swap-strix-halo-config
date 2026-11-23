@@ -15,7 +15,8 @@ eleven are too.
 
 gufo-ds41 114000, laya 40000, ornith-35b-a3b 34000, hipfire-35b-a3b 32000,
 hipfire-flash-next 32000, gufo-27b 30000, hipfire-27b 28000, gufo-deepseek 26000,
-deepseek-v4-flash 26000, openjev-q4 26000, hipfire-4b 8000.
+deepseek-v4-flash 26000, openjev-q4 26000, hipfire-4b 8000 (decomposed in
+section 5, not yet by host delta).
 
 gufo-ds41 first: it is the largest single claim on the box and has never been
 loaded here at all.
@@ -129,9 +130,40 @@ already on disk (`fit` calls flash-next "installed, 116.7 GiB" - 0.4.7 still
 honours the monolithic files the older build pulled), gfx1151 kernel packs are
 baked in, and `serve <tag> 0.0.0.0:11435` still parses.
 
-Not verified: a completion, the NPU trunk route, and what 0.4.7 actually holds.
-`hipfire-4b` at 8000 is the cheapest way to find out, and 8000 is a guess like
-the rest of section 1.
+`hipfire-4b` has since been load-tested through the swap, three cycles, with
+guvo-flash-next as the eviction victim. The other three hipfire tags have not
+been exercised on 0.4.7.
+
+- It serves: `/ready` 5-12 s from an idle box, warm decode 66.7 tok/s (400
+  tokens in 6 s wall), streaming intact. hipfire's `usage` carries no
+  per-second fields and its stream carries no `usage` at all, so that number is
+  wall-derived - the gufo trick in AGENTS.md does not transfer.
+- Its own log gives the accounting `podman stats` cannot (it reads `0B` for
+  this container): 4101 MiB of weights, `K=V=q8` at `kv_bytes_per_token=17408`,
+  so 4352 MiB of KV at the 262144 ctx it advertises - 8453 MiB against the
+  entry's 8000. The guess is ~5% light at full context and holds below ~240k
+  tokens. Raising it and capping `max_seq` both want a restart, so it stays with
+  the rest of section 1.
+- `kernels: no closed route plan (UnsupportedRoute("model arch 5 on gfx1151 has
+  no closed route")); predicted fallback + 373 predicted qwen3.5 modules`, then
+  42 `unplanned kernel ... bound lazily` warnings after ready. The gfx1151 packs
+  ship and verify, but this arch runs an unplanned plan on this card, so a
+  hipfire throughput figure is measured-here, not guaranteed-by-upstream. Read
+  the load lines of any tag before trusting its speed.
+- Host deltas across time are worthless on this engine: with hipfire-4b
+  resident, avail read 121001/121002/121003 MiB across three runs, while
+  flash-next resident read 17159, 22002 and 25893 in the same state. The weights
+  are read-only and file-backed, so they sit in reclaimable cache that
+  `MemAvailable` counts as free. Use the engine's own logged figures.
+- Thinking is the trap on all four entries, and upstream documents it: 64
+  tokens and 400 both came back `content: ""`, `finish_reason: length`, all
+  budget spent in `reasoning_content`. `chat_template_kwargs:
+  {"enable_thinking": false}` fixed it end to end through llama-swap (295 chars
+  of content, reasoning empty); `reasoning_effort: "low"` did not, as upstream
+  says it would not - effort is prompt strength, never a think-token budget -
+  and the `"thinking": "off"` form it also lists did not take on this tag.
+  gufo's inkling2 extension ignored the same switch (section 4), so engine by
+  engine, not by analogy.
 
 Also open on this engine:
 
