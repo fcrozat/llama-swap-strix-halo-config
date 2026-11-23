@@ -18,11 +18,13 @@ hooks:
       - gufo-flash-next
 
 macros:
-  # The one line to edit when this layout moves: ${home} is the account
-  # that runs llama-swap. llama-swap has no ${HOME} of its own - an unknown
-  # ${MACRO} is a load error, not a literal - so it is a value here, not a
-  # shell variable.
-  home: $HOME
+  # The account that runs llama-swap, from the process environment: ${env.VAR}
+  # is llama-swap's own syntax, substituted before macro expansion. Bare ${HOME}
+  # is not it - an unknown ${MACRO} is a load error - and nothing here needs a
+  # shell. An unset variable fails validation outright rather than expanding to
+  # empty, so a missing HOME cannot quietly turn into a "/.local/..." mount:
+  # llama-swap -config config.yaml -validate refuses the file.
+  home: ${env.HOME}
   dir: /var/lib/models/llama
   image: docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-10.0-strix-llama
   run: |
