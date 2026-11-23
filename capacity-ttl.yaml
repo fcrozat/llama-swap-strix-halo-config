@@ -18,6 +18,11 @@ hooks:
       - gufo-flash-next
 
 macros:
+  # The one line to edit when this layout moves: ${home} is the account
+  # that runs llama-swap. llama-swap has no ${HOME} of its own - an unknown
+  # ${MACRO} is a load error, not a literal - so it is a value here, not a
+  # shell variable.
+  home: $HOME
   dir: /var/lib/models/llama
   image: docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-10.0-strix-llama
   run: |
@@ -28,7 +33,7 @@ macros:
   # installed by ./run-gufo.sh ext install. A model loads a module only if its
   # image's extension API matches the one it was built against, so the :latest
   # models below skip it ("needs update" in gufo extension list).
-  gufo_ext: $HOME/.local/share/gufo/extensions
+  gufo_ext: ${home}/.local/share/gufo/extensions
   gufo_image: ghcr.io/gufo-org/toolboxes/gufo-runtime:latest
   # SSL_CERT_FILE: the image carries its CA bundle as one file OpenSSL does not
   # pick up on its own, so registry fetches warn "unable to get local issuer".
@@ -65,7 +70,7 @@ macros:
   # gufo-nix volume; loom/gufo symlinks it (see loom/README.md). gufo_pod is not
   # reusable: Loom's GPU memory reservation needs seccomp=unconfined, and the
   # module is compiled in, so mounting ${gufo_ext} would only invite a mismatch.
-  loom_dir: $HOME/strix/launchers/loom
+  loom_dir: ${home}/strix/launchers/loom
   loom_image: docker.io/nixos/nix:latest
   loom_pod: >-
     podman run --rm --replace --name ls-${MODEL_ID} --device /dev/dri --device
@@ -80,7 +85,7 @@ macros:
   ds41_dir: /models/DeepSeek-V4.1-Flash-1017
   ds41_q: DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M
   ds41_draft: DeepSeek-V4.1-Flash-1017-DSpark-draft-Q2K-Q4K.gguf
-  hipfire_cache: $HOME/hipfire-kcache
+  hipfire_cache: ${home}/hipfire-kcache
   hipfire_dir: /var/lib/models/hipfire
   hipfire_image: localhost/hipfire:latest
   hipfire_run: |
