@@ -76,14 +76,18 @@ identity, deliberately.
 History rewritten first, with every commit kept: llama-swap's own `README.md`,
 `CHANGELOG.md` and `LICENSE.md` are out of it, the first two because they were
 tracked before being gitignored and the third because its MIT text carries
-upstream's copyright, not this tree's. Every hash changed; the old history is in
-`~/launchers-pre-rewrite.bundle`. The `loom/gufo` symlinks still appear in the
-older commits - they point at a `/nix/store` output, which is a build id and not
-a secret.
+upstream's copyright, not this tree's. Every hash changed. The `loom/gufo`
+symlinks still appear in the older commits - they point at a `/nix/store`
+output, which is a build id and not a secret. A second pass then rewrote the
+local account name out of every blob and every commit message: config paths read
+`${env.HOME}`, which llama-swap substitutes for real, and the comments address
+the reader as `$USER`.
 
-What a clone gets is 16 files and 220 KiB: no binaries, no weights, no upstream
-docs. The local account name survives in `capacity-old.yaml` and a handful of
-comments; the live config reads `${env.HOME}` and carries none.
+What a clone gets is 17 files and 83 KiB: no binaries, no weights, no upstream
+docs, and no local account name anywhere in the object store. Two safety bundles
+sit in the home directory, both taken before the scrub, so both still carry the
+name - `launchers-pre-rewrite.bundle` additionally carries the upstream docs.
+Both go once this history is confirmed good.
 
 ## 4. What the first inkling2 load left open
 

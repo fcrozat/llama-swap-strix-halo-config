@@ -19,7 +19,7 @@ macros:
   gufo_image: ghcr.io/gufo-org/toolboxes/gufo-runtime:latest
   gufo_run: |
     podman run --rm --replace --name ls-${MODEL_ID} --device /dev/dri --device /dev/kfd --group-add keep-groups --ulimit memlock=-1 --userns keep-id:uid=1000,gid=1000 --volume ${dir}:/models:ro --volume ${gufo_cache}:/gufo_cache:rw,z --publish 127.0.0.1:${PORT}:8080 ${gufo_image} gufo serve --host 0.0.0.0 --port 8080 llm --draft-tokens 7 --sessions 4 --max-pending-per-client 4 --max-tokens 32768 --context 131072 --cache-disk /gufo_cache --reasoning-effort xhigh --preserve-thinking on
-  hipfire_cache: $HOME/hipfire-kcache
+  hipfire_cache: ${env.HOME}/hipfire-kcache
   hipfire_dir: /var/lib/models/hipfire
   hipfire_image: localhost/hipfire:latest
   hipfire_run: |

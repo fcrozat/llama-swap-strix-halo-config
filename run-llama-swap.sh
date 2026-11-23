@@ -17,7 +17,7 @@
 # down or it loads the same weights twice and holds :8080:
 #
 #   sudo systemctl disable --now gufo            # on the host
-#   sudo loginctl enable-linger $USER           # so the user unit runs at boot
+#   sudo loginctl enable-linger $USER            # so the user unit runs at boot
 set -euo pipefail
 
 MODELS_HOST=${MODELS_HOST:-/var/lib/models}

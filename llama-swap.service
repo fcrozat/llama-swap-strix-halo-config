@@ -8,7 +8,7 @@
 #                                       # its old settings until it restarts
 # Validate with: systemd-analyze --user verify llama-swap.service
 #
-#   sudo loginctl enable-linger $USER       # start without a login session
+#   sudo loginctl enable-linger $USER        # start without a login session
 #   sudo systemctl disable --now gufo        # old rootful quadlet, frees :8080
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now llama-swap
