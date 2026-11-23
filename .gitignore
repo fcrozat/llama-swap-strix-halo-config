@@ -11,9 +11,13 @@
 # vendored, and nothing here builds it - no go.mod, no importer
 /changelog/
 
-# the tarball's own upstream docs: extracted beside the binary, nothing of ours
+# the tarball's own upstream docs: extracted beside the binary, nothing of ours.
+# LICENSE.md is llama-swap's own MIT text and carries Benson Wong's copyright, so
+# it belongs upstream: this repo publishes its config and launchers, not a
+# license that could be read as claiming someone else's work as ours.
 /README.md
 /CHANGELOG.md
+/LICENSE.md
 
 # runtime droppings
 *.log
