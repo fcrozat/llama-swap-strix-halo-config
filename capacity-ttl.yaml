@@ -309,6 +309,13 @@ models:
     evict_cost: 10
     concurrencyLimit: 4
 
+  # The four hipfire claims are full-context worst cases composed from the
+  # engine's own load lines (podman logs ls-<id>): planning weights +
+  # kv_bytes_per_token x max_seq + prefill scratch + draft/vision reserve.
+  # hipfire's KV is vmm - "0 MiB committed at load", grown per token as context
+  # is used - so what is resident after a short probe is far below what a long
+  # prompt commits, and the pool has to be reserved for the latter. None of them
+  # cap max_seq: every tag serves its trained 262144.
   hipfire-27b:
     name: Qwen3.8 27B mq4 (hipfire)
     useModelName: qwen3.8:27b
@@ -317,7 +324,9 @@ models:
       serve qwen3.8:27b 0.0.0.0:11435
     cmdStop: podman stop ls-hipfire-27b
     proxy: http://localhost:${PORT}
-    capacities: { mem: 28000, npu: 1 }
+    # 14937 weights + 34816 B/tok x 262144 (8704) + 1746 prefill/checkpoints +
+    # 1810 dflash draft + ~420 vision staging and activation reserve = 27617.
+    capacities: {mem: 29000, npu: 1}
     evict_cost: 30
 
   hipfire-35b-a3b:
@@ -328,7 +337,10 @@ models:
       serve ornith-1.5:35b-a3b 0.0.0.0:11435
     cmdStop: podman stop ls-hipfire-35b-a3b
     proxy: http://localhost:${PORT}
-    capacities: { mem: 32000, npu: 1 }
+    # 18139 weights + 10880 B/tok x 262144 (2720) + 2793 prefill/checkpoints =
+    # 23652. The 462 MiB .mtp next to it is not claimed: the load says spec off.
+    # Was 32000, which spent 7 GiB of pool on a buffer that does not exist.
+    capacities: {mem: 25000, npu: 1}
     evict_cost: 30
 
   hipfire-4b:
@@ -339,7 +351,9 @@ models:
       serve qwen3.5:4b 0.0.0.0:11435
     cmdStop: podman stop ls-hipfire-4b
     proxy: http://localhost:${PORT}
-    capacities: { mem: 8000, npu: 1 }
+    # hipfire plans 3.2 GiB of weights for a 2468 MiB file, plus 17408 B/tok x
+    # 262144 (4352) and 1251 of prefill scratch = 8973. Was 8000.
+    capacities: {mem: 9000, npu: 1}
     evict_cost: 5
 
   hipfire-flash-next:
@@ -350,7 +364,15 @@ models:
       serve qwen3.8:flash-next-mq4-xts 0.0.0.0:11435
     cmdStop: podman stop ls-hipfire-flash-next
     proxy: http://localhost:${PORT}
-    capacities: { mem: 32000, npu: 1 }
+    # Its own plan: 62475 routed experts + 5115 non-expert + 15045 reserve, then
+    # 6747 more committed at 262144 (5408 QSA context + 512 gather workspace +
+    # 827 MTP) = 89382. MemAvailable agrees: ~121 GiB free with nothing else
+    # resident, 33 with only this, ~88 GiB before any context is committed - and
+    # the 116.7 GiB file keeps 26.8 GiB of PLE table mapped host-side, out of
+    # reclaim. 95000 covers the composed worst case with headroom. The 32000
+    # before it was the hazard: 32000 + loom-inkling's 70000 = 102000 fit the
+    # pool on paper while 165000 of it was physical.
+    capacities: {mem: 95000, npu: 1}
     evict_cost: 30
 
   laya:

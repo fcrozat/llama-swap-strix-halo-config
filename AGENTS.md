@@ -98,6 +98,15 @@ device memory no container stat shows. Every `capacities: {mem:}` is a claim
 about physical RAM; a guessed one is how two models get loaded that do not fit.
 `TODO.md` lists the entries still resting on a guess.
 
+Read the label though: hipfire's `free_after_weights=` is memory still free, not
+a weight size. Its KV is `vmm` - the load says `0 MiB committed at load` and
+commits per token as context grows - so what is resident after a short probe
+says nothing about a long prompt, and a resident-set delta taken then
+under-claims. For hipfire the claim is the full-context worst case, built from
+its own lines: weights + `kv_bytes_per_token` x `max_seq` + prefill scratch +
+draft/vision. That is a second method beside the delta, and it is worth saying
+which one a number came from.
+
 ## Engines and their flag sets
 
 Four run macro families (`run`, `gufo_run` / `gufo_ds41_run`, `hipfire_run`,
@@ -135,8 +144,16 @@ directory: Permission denied (os error 13)` before a model is even chosen.
 "Baked in" means the kernels ship, not that a route is chosen: 0.4.7 loads
 `qwen3.5-4b` here as `no closed route plan (UnsupportedRoute("model arch 5 on
 gfx1151 has no closed route"))` on a predicted fallback plan, with 42 `unplanned
-kernel ... bound lazily` warnings after ready. The load lines say which plan a
-tag took - read them before quoting that tag's speed.
+kernel ... bound lazily` warnings after ready. Every tag here took a predicted
+plan, for four different reasons; the load lines say which, so read them before
+quoting that tag's speed.
+
+`HIPFIRE_QWEN4_NPU_TRUNK=auto` is likewise not a promise of NPU work. It packed
+2.0 GiB of panels for flash-next off a built-in calibration taken on kernel
+`7.3.0-rc7-perfopt+` and build `hipfire-0.4.2:npu-trunk-bf16-rowmajor-v1` (this
+host: `7.3.5-1-default`), then planned `rows=20 families=none plan=[gpu 0..20]
+predicted=+0.0%`. It claims `/dev/accel/accel0` whatever it decides, so `npu: 1`
+holds either way.
 
 ## Testing a model
 
