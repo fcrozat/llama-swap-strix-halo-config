@@ -27,8 +27,11 @@ LISTEN=${LISTEN:-:9931}
 # reload config.yaml when it changes: a model entry then applies without a unit
 # restart, which would drop whatever model an interactive session is running on
 WATCH_CONFIG=${WATCH_CONFIG:-true}
-# built release tarball checkout; override with LLAMA_SWAP=/path/to/llama-swap
-BIN=${LLAMA_SWAP:-$HOME/strix/launchers/llama-swap}
+# the host package install - this script is run by the host unit, not from a
+# distrobox, where /usr/bin/llama-swap does not exist: from inside one, call
+# ./llama-swap -config config.yaml -validate directly. Override with
+# LLAMA_SWAP=/path/to/llama-swap
+BIN=${LLAMA_SWAP:-/usr/bin/llama-swap}
 
 if [[ ! -x $BIN ]]; then
   echo "llama-swap binary not found: $BIN (set LLAMA_SWAP=/path/to/llama-swap)" >&2
