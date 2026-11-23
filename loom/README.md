@@ -19,5 +19,9 @@ the toolbox image now speaks a newer API and ships `libloom_text_embed.so`
 itself. It is still what serves these models, though, because its built-in
 loom predates Inkling-2-Mini support, and only `loom_pod` passes the
 `seccomp=unconfined` the GPU memory reservation is documented to need.
-`TODO.md` §6 records the module install measured to close that gap, and the
-load test that has not been run.
+That gap was measured and did not close: the v0.3.7 module builds inside the
+toolbox image and its `model list` offers `inkling-2-mini-loom`, but `serve`
+dies at `load_started` with `fatal_signal signal=11` about 230 ms in - with
+`seccomp=unconfined` on, so this container's flag is not the reason this binary
+works and the module does not. `TODO.md` §6 has the log lines and the one
+variable left untested.

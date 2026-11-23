@@ -134,18 +134,23 @@ Traps around gufo:
   an upgrade, not just the rows belonging to installed modules.
 - Loom (Inkling) is still not in the reviewed registry, so it is a git pin, not
   `ext install loom` - that half of why it runs a Nix-built gufo in the
-  `gufo-nix` volume stands. The other half does not: the extension asks for
-  API `>= 0.3.35`, this image speaks more, and it carries
+  `gufo-nix` volume stands. The other half used to be the extension API: this
+  image speaks more than the `>= 0.3.35` the extension asks, and it carries
   `libloom_text_embed.so` plus a `loom-runtime` store path with the header and
-  cmake package `CMAKE_PREFIX_PATH` wants. Its built-in loom is one release
-  behind the one that added Inkling-2-Mini, which is why the image answers
-  `no loaded extension offers it` for `inkling-2-mini-loom` while the Nix
-  binary serves it. `${loom_serve_llm}` names `/loom/gufo` because bare `gufo`
-  is on the toolbox image's PATH only, and `loom/README.md` rebuilds it in ~3
-  minutes and re-points the symlinks (local artifacts, not tracked). Only
-  `loom-inkling` runs that way: `Inkling-2-Mini` itself is served by the
-  `inkling2` module, which is in the registry and needs no Nix. `TODO.md` §6
-  holds the probe that closes this gap and what it left untested.
+  cmake package `CMAKE_PREFIX_PATH` wants, so a v0.3.7 module does build there
+  and `model list` then offers `inkling-2-mini-loom`. It does not serve it: the
+  load dies at `load_started` with `fatal_signal signal=11`, about 230 ms after
+  the container starts, with the pool free and with `seccomp=unconfined` on too
+  - so neither the sandbox nor a missing symbol is what the Nix binary supplies,
+  and the module is not a way in. Its built-in loom is one release behind the
+  one that added Inkling-2-Mini, which is why the image answers
+  `no loaded extension offers it` without the module. `${loom_serve_llm}` names
+  `/loom/gufo` because bare `gufo` is on the toolbox image's PATH only, and
+  `loom/README.md` rebuilds it in ~3 minutes and re-points the symlinks (local
+  artifacts, not tracked). Only `loom-inkling` runs that way:
+  `Inkling-2-Mini` itself is served by the `inkling2` module, which is in the
+  registry and needs no Nix. `TODO.md` §6 has the segfault and the one variable
+  it leaves (`--replace-builtin`).
 
 hipfire runs upstream's own image: `ghcr.io/warpfront/hipfire`, `full` variant
 (ROCm 10.1.0-3, kernel packs for gfx1100/gfx1151/gfx1201 baked in), release tag

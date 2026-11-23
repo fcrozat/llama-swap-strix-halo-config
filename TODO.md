@@ -219,7 +219,7 @@ Also open on this engine:
   not offer. At 66000 it is the first flash-next that could share the 118000
   pool with anything, which is the question section 2 asks about the gufo entry.
 
-## 6. Retire the Nix-built gufo, now that the image can host the loom module
+## 6. Serve Inkling on Loom from the toolbox image, without Nix
 
 `ghcr.io/gufo-org/toolboxes/gufo-runtime:latest` is gufo 0.36.0 (`4a7d8c6`) on
 extension API 0.3.42. Both installed modules had been skipped since that pull:
@@ -250,18 +250,38 @@ The Nix build (the 5.9 GiB `gufo-nix` volume, `nix-loom-build.sh`,
   `no loaded extension offers it`. That is the whole remaining gap: upstream
   added Inkling-2-Mini in loom 0.3.7, the image bundles 0.3.6.
 
-Still open, the first of which costs an eviction:
+Then the load test, which is the answer: no. `loom-inkling` was repointed at
+`${gufo_pod} --env GUFO_MODELS_DIR=/models ${gufo_image} ${gufo_serve_llm}
+--model inkling-2-mini-loom`, validated (`config is valid: 18 model(s)`) and
+asked for through the swap - which evicted `gufo-flash-next` to make room, so
+the pool was free when it died:
 
-- Whether it serves. `model list` proves the extension offers the package, not
-  that a 70000 load works, and `gufo-flash-next` at 112000 cannot coexist with
-  it: whoever runs the test loses the model they are typing on.
-- Whether `seccomp=unconfined` is still needed. Only `loom_pod` passes it,
-  `gufo_pod` does not, and the claim predates this image. Serve once with, then
-  once without.
-- `run-gufo.sh` does not pass `CMAKE_PREFIX_PATH`, and upstream wants it for
-  `ext update` after a gufo upgrade as well. The path is a Nix store hash that
-  changes with every image build, so the script has to look it up inside the
-  image (`ls -d /nix/store/*loom-runtime*`) instead of hardcoding it.
+    [loader] event=load_started kind=text
+      artifact=/models/inkling-2-mini-loom host_available_mib=124212
+    [ERROR] [server] event=fatal_signal signal=11
+
+Three attempts, identical each time: about 230 ms from `container start` to
+`container died`, `upstream command exited prematurely` in the swap log, HTTP
+500 to the client. `artifact=` names the package directory, so
+`GUFO_MODELS_DIR`, the module's offer and the command line are all fine, and
+124212 MiB available rules out memory.
+
+- `seccomp` was the first suspect, because a blocked `mmap` comes back as a
+  dereferenced null and `loom_pod` passes `--security-opt seccomp=unconfined`
+  for Loom's reservation. Run by hand with that flag on and the pool free it
+  segfaulted in the same 227 ms, so the flag is not what the Nix binary
+  supplies. Whether a working module would still want it is unknown - the
+  crash is before any device work - and `loom_pod` keeps passing it.
+- Not a link mismatch: the module wants 42 `loom*` symbols, the image's
+  `libloom_text_embed.so` exports 47, and none of the 42 are missing.
+- `--replace-builtin` is the variable left untested. It seats the module where
+  the built-in `loom-text` provider was, so double registration is the
+  remaining suspect. Retry without it and read `gufo --version`: `loom 0.3.7
+  (module:....so)` against `loom 0.3.6 (src/models/loom)` tells the two states
+  apart.
+- `run-gufo.sh` now passes `CMAKE_PREFIX_PATH` through when set, which is what
+  let the build above link. The value has to be looked up inside the image
+  (`ls -d /nix/store/*loom-runtime*`) because the hash moves with every build.
 - Loom is still not in the reviewed registry - nine modules:
   deepseek41flash, diffusion_gemma, flint, gemma4, inkling2, lfm3, nemotron,
   strycast_qwen35moe, upscale - so it stays a git pin and `ext update` will
@@ -270,9 +290,18 @@ Still open, the first of which costs an eviction:
   "no reviewed release supports linux and extension API 0.3.42". Nothing here
   uses either; it matters only if the Qwen3.6-35B-A3B / Ornith 1.5 122B
   kernels are ever wanted.
-- On adoption: point `loom-inkling` at `${gufo_pod} ${gufo_image}
-  ${gufo_serve_llm}` with `--model inkling-2-mini-loom`, keep
-  `--security-opt seccomp=unconfined` until the test above says otherwise, then
-  drop the volume, both nix scripts, `loom_pod`, `loom_serve_llm` and
-  `loom/README.md`. The scratch store is 8.7 MB and can be deleted; the live
-  store still holds only `deepseek41flash` and `inkling2`.
+- The module went back out: `./run-gufo.sh ext remove loom`. The live store is
+  `deepseek41flash` + `inkling2` again and `--version` reports the built-in for
+  every gufo entry, which is how it should stay - a module that segfaults has
+  no business shadowing the built-in provider in a store all six gufo entries
+  mount. `/tmp/gufo-ext-probe` (8.7 MB) can go too.
+- `loom-inkling` is back on the Nix binary and measured on the way back:
+  `load_started 124602 -> load_completed 53093` = 71509 MiB at 4 sessions /
+  131072, within 61 MiB of the `124910 -> 53340` already recorded above the
+  entry, so `mem: 70000` is twice-measured now. 11.2 s to `load_completed`,
+  then 45.2 tok/s decode, ttft 208.7 ms, draft acceptance 74.6%.
+- If a retry ever serves, adoption is: point `loom-inkling` at `${gufo_pod}
+  ${gufo_image} ${gufo_serve_llm}` with `--env GUFO_MODELS_DIR=/models`, then
+  drop both nix scripts, `loom_pod`, `loom_serve_llm` and `loom/README.md`.
+  The `gufo-nix` volume is the only rollback for a model that has no other
+  Loom-capable binary on this box, so it goes last.

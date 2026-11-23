@@ -73,10 +73,11 @@ macros:
   # did not have - is stale on both counts now: the image speaks a newer API
   # and ships the loom library, but its built-in loom predates Inkling-2-Mini
   # support, so this binary is still the one that serves the package.
-  # TODO.md §6 measured the module install that would replace it and left the
-  # serving test open. gufo_pod is not usable for it yet either: only loom_pod
-  # passes seccomp=unconfined, which Loom's GPU memory reservation is
-  # documented to need - untested against the current image.
+  # TODO.md §6 tried that install: it builds, --version shows the module in
+  # place of the built-in and model list offers the package, but the load dies
+  # at load_started with fatal_signal 11 - pool free, seccomp=unconfined both
+  # on and off - so the flag is not what this binary supplies. The module went
+  # back out with `ext remove loom`; this volume serves the model.
   loom_dir: ${home}/strix/launchers/loom
   loom_image: docker.io/nixos/nix:latest
   loom_pod: >-
@@ -295,8 +296,9 @@ models:
   # a fallback resident ahead of the model someone is actually using.
   # Loom commits its whole pool at load: 17.6 GiB of weights plus the state of
   # the package's chat preset (context_capacity 1048576, rows 4), measured at
-  # 69.9 GiB (gufo: host_available_mib 124910 -> 53340) and it does not shrink
-  # with --context, so 70000 is simply what it costs. With flash-next now
+  # 69.9 GiB (gufo: host_available_mib 124910 -> 53340, and 124602 -> 53093 on
+  # a later cold load, 61 MiB apart) and it does not shrink with --context, so
+  # 70000 is simply what it costs. With flash-next now
   # declaring its measured 112000, the 118000 pool keeps the two apart without
   # inflating either number.
   loom-inkling:

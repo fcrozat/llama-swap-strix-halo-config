@@ -26,10 +26,20 @@
 # `serve` mounts that same $EXT_DIR, so an installed module is live on the next
 # serve start (a running server keeps its already-loaded set). A module is tied
 # to the exact gufo build it was compiled for: after `podman pull`, `ext list`
-# shows `needs update` and gufo skips the module until `ext update` rebuilds it.
+# shows `needs update` and gufo skips the module until `ext update` rebuilds it
+# - and the server still answers /ready while it skips, so the health check is
+# not the check, the log line "is not built for this gufo" is.
 # `ext list` also names a newer release when one exists ("0.3.0 available");
 # `ext update` moves a registry install to it, a git pin is only rebuilt.
 # llama-swap mounts the same store too (gufo_ext in config.yaml).
+#
+# A module that links a library the runtime image ships needs
+# CMAKE_PREFIX_PATH, and loom wants it for `install` *and* for the post-pull
+# `ext update`. In the image that library sits at a Nix store path whose hash
+# changes with every build, so look it up instead of recording it:
+#   LR=$(podman run --rm --entrypoint /bin/sh "$IMAGE" \
+#        -c 'ls -d /nix/store/*loom-runtime*')
+#   CMAKE_PREFIX_PATH=$LR ./run-gufo.sh ext update   # passed through when set
 #
 # The image carries its CA bundle as one file that OpenSSL does not pick up on
 # its own, so registry/Git fetches fail with "unable to get local issuer
@@ -178,6 +188,10 @@ if [[ ${1:-} == ext || ${1:-} == extension || ${1:-} == --ext ]]; then
   # the registry index override, if the caller points at a fork or a file
   [[ -n ${GUFO_EXTENSION_REGISTRY:-} ]] \
     && RUN+=(-e GUFO_EXTENSION_REGISTRY="$GUFO_EXTENSION_REGISTRY")
+  # and the prefix of a library the image ships, for modules that link one
+  # (loom - see the CMAKE_PREFIX_PATH note at the top)
+  [[ -n ${CMAKE_PREFIX_PATH:-} ]] \
+    && RUN+=(-e CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH")
   MNT=()
   # an install source that exists on this host has to be visible in the
   # container: mount it at itself (ro - gufo copies it into the store to build)
