@@ -32,11 +32,13 @@ follow-through rather than judgement:
    claims still date from 131072, so until they move the config is stricter than
    the hardware on purpose - §2 says why the two cannot be changed in one step.
    Needs a window where our own requests are the only traffic, not exclusivity.
-2. §1's two remaining anomalies are one thing seen twice: `laya` and
-   `openjev-q4` are decision models, so a chat request is a 501 by design and
-   nobody here has driven them through `/v1/systemone` once. Either find a
-   client for that schema or drop the pair - both claims are load-time figures,
-   not driven ones.
+2. Drive `openjev-q4` once. The 501 is by design and the `/v1/systemone` schema
+   is now written down in §1, and `laya` has been driven - so "nothing can speak
+   it" is no longer the reason. `openjev-q4` is the only entry on this box that
+   has never answered anything, and it needs a window rather than a client: its
+   29000 will not join a warm flash-next inside the 124000 ceiling, so loading it
+   evicts whatever is answering. Until then it holds 29000 of claim on a load
+   measured at twice the context the macro now asks for.
 3. §2's resident-set question, which the smaller contexts make sharper: ds41 is
    exclusive by construction and preload warms flash-next - which set do we want
    warm?
@@ -144,7 +146,7 @@ serialises memory and an unmanaged probe does not - it loaded, served two 200s,
 and decoded worse than plain: 15.02 t/s on a novel 266-token completion against
 17.08 t/s for the same weights undrafted, and 16.22 t/s on a prompt built to feed
 it (one sentence repeated ten times) that reached 0.446 acceptance, 144 drafts
-accepted of 323 generated. Those are llama.cpp's own numbers, not curl's wall
+accepted of 323generated. Those are llama.cpp's own numbers, not curl's wall
 clock:
 
     slot print_timing: eval time = 17647.60 ms / 266 tokens (66.59 ms per token, 15.02 tokens per second)
@@ -156,14 +158,34 @@ closed for this entry on evidence rather than by omission.
 The entry ran the main model alone at 89000 up to the paragraph above, which is
 where the judgement landed: out, on duplication rather than on footprint.
 
-`laya` and `openjev-q4` are decision models and nothing here can drive them:
-`/v1/chat/completions` answers 501 "This model is a decision model without text
-generation, use /v1/systemone", and `/v1/systemone` wants a `state` object plus
-a non-empty `questions` object. So laya's 1130 is a load that was never asked
-anything, and its claim is weights plus its own 8192-token context with
-headroom, not a driven figure. Worth one client that speaks that schema before
-trusting either number - and worth knowing that any plain OpenAI client pointed
-at these two entries gets a 501.
+`laya` and `openjev-q4` are decision models, so a text request is refused by
+design: `/v1/chat/completions` answers 501 "This model is a decision model
+without text generation, use /v1/systemone". That endpoint is forwarded by
+llama-swap and the model id comes from the body's `model` field as on any other
+route, so both are reachable, and `laya` was driven for the first time on this
+box on 2026-11-24 (unloaded again at 17:13). The schema is documented nowhere on
+the box; it was read off the engine's own 400s, one field at a time:
+
+    {"model":"laya","state":"...","questions":{"q":{"type":"choice",
+      "instructions":"...","criteria":{"keep":"...","drop":"..."}}}}
+
+`state` is required and a bare string is accepted; `questions` must be a
+non-empty **object** (an array is refused); each question needs `instructions`
+and a `type` of `choice`, `score` or `noul`; `choice` takes `criteria` as an
+object, `score` as an array of 2 to 10 levels. The trap is `options`: the engine
+accepts it and ignores it - the choice space is the criteria keys and it answers
+from their descriptions. Answers are deterministic (0.1013 / 0.8987 to the last
+digit across repeats) and `usage.output_tokens` is 0, because nothing here is
+generated.
+
+Driven, `laya` troughs at 1006 MiB and settles at 976 after five questions some
+of which carried ~750-token states, against 1021 and 1130 from loads nobody
+talked to: traffic does not grow it, so its 2500 is headroom over a measured
+figure now, not an estimate of one. `openjev-q4` is still undriven for an
+admission reason rather than a schema one - 113000 of warm flash-next plus its
+own 29000 is over the 124000 ceiling, so driving it evicts the model an
+answering session runs on. It picks its number up in §2 with the rest, and that
+number will go down: it was measured asking 131072 and the macro now asks 65536.
 
 The ceiling those ten are measured against was settled on 2026-11-24, and not in
 the direction the config comment asked for. It was 118000, a placeholder at

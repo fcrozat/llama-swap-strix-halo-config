@@ -406,15 +406,24 @@ models:
       --model /models/systemone/Laya-Q8_0.gguf --spec-type none
     cmdStop: podman stop ls-laya
     proxy: http://localhost:${PORT}
-    # Measured twice, 10:17 and 10:46: 1021 and 1130 MiB, on a load that never
-    # answered anything. The file is 429 MiB, llama.cpp clamps its slot to
-    # n_ctx_slot 8192 ("the slot context ... exceeds the context the model can
-    # serve"; that parenthetical said 131072 before the macro came down, and the
-    # clamp is the model's, not the flag's), and a decision model gets no
-    # prompt cache by default, so this cannot grow into the 40000 it used to
-    # claim. Headroom over weights plus 8192 tokens, not a measured driven
-    # figure: chat answers 501 and
-    # /v1/systemone wants a `state` plus a non-empty `questions` object.
+    # Driven at last, 16:2x - and it did not grow. Load alone measured 1021 and
+    # 1130 MiB on 10:17 and 10:46; a load followed by five /v1/systemone
+    # questions (some with ~750-token states) troughs at 1006 and settles at
+    # 976. So this is weights plus the model's own context plus ~1500 of
+    # headroom, and the claim no longer rests on a load nobody talked to.
+    # The file is 429 MiB; llama.cpp clamps the slot to n_ctx_slot 8192 ("the
+    # slot context ... exceeds the context the model can serve" - that
+    # parenthetical names whatever the macro asks for; the clamp is its own.
+    # A decision model, so /v1/chat/completions answers 501 BY DESIGN; the
+    # endpoint is /v1/systemone and llama-swap forwards it, taking the model id
+    # from the body's "model" field as it does for any other route. Shape, read
+    # off the engine's own 400s: `state` required (a bare string is accepted);
+    # `questions` a non-empty OBJECT of id -> {instructions, type}; type one of
+    # choice, score, noul; choice wants `criteria` as an object, score as an
+    # array of 2 to 10 levels. The trap is `options`: accepted, then ignored -
+    # the choice space is the criteria keys, and it answers from their
+    # descriptions. Deterministic (0.1013/0.8987 to the last digit on repeat)
+    # and usage reports output_tokens 0 because nothing is generated.
     capacities: {mem: 2500}
     evict_cost: 1
     concurrencyLimit: 4
@@ -426,10 +435,16 @@ models:
       --model /models/systemone/OpenJev-Q4_K_M.gguf --spec-type none
     cmdStop: podman stop ls-openjev-q4
     proxy: http://localhost:${PORT}
-    # Measured 10:35 on a clean pool (the 10:10 run had an eviction in it and
-    # is void): trough 28046, settled 27989, without running a token. 18 GiB is
-    # the file; this one keeps the macro's 131072 slot, so unlike laya it pays
-    # the KV up front for context it has not used.
+    # Measured 10:35 on a clean pool (the 10:10 run had an eviction in it and is
+    # void): trough 28046, settled 27989, without running a token. 18 GiB is the
+    # file; the rest was the KV this entry asked the macro for at 131072, and
+    # since 2026-11-24 the macro asks 65536, so the claim is conservative by
+    # roughly half a context term it no longer buys. Not rewritten to a guess -
+    # it is on the re-sweep in TODO.md §2, and it is the one entry that re-sweep
+    # cannot do beside a warm box: 113000 plus 29000 is over the 124000 ceiling,
+    # so admitting it evicts whatever an answering session runs on. Its 501 on
+    # /v1/chat/completions is by design, not a fault: a systemone decision
+    # model, schema written out on laya, which is drivable and was driven.
     capacities: {mem: 29000}
     evict_cost: 1
     concurrencyLimit: 4
