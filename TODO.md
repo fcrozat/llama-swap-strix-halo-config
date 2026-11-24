@@ -691,6 +691,43 @@ own larger figure wins on a box where the cheaper instrument is the one in doubt
 Where the other 15 GiB goes is left for someone with root; nothing in the config
 now waits on the answer.
 
+### Addendum, 2026-11-25 00:13: the gap did not survive the weights
+
+The entry now runs the mainline-layout root file (arch `inkling2_loop`, 744
+tensors) on inkling2 0.1.4, and three loads from a pool verified empty put the
+two instruments 4% apart instead of 15 GiB apart: host troughs 41037 and 41087
+(0.12% apart, so a repeat rather than a lucky run) with the engine reading
+`host_available_mib` deltas 41011 and 41049 against `gpu_device_used_mib`
+39551 every time - the device figure now *under* the host one. The 0.1.3
+pairing (host ~41100 against device 56348, three loads agreeing) was therefore a
+property of that file set and that module release, not of gufo's accounting, and
+57000 - declared permanent above, nine hours earlier - over-states the load by
+about 7700. The claim is 49300: the larger load (41087) plus what
+`--cache-ram-bytes` (8192) may still take. The trough already carried
+`global_ram_bytes` 2413 of cache, so if that bound is global the room open is
+5779 and the claim would be 46900 - the arithmetic §4 used - while if a session
+can each reach it the sum is 49279. The wider reading is claimed: 2400 of pool
+is cheaper than settling what the bound scopes.
+
+That also changes what the open question is worth. It is no longer "is
+MemAvailable blind to 15 GiB of kfd pages" - on this file set the engine reports
+less device memory than the host lost, so nothing is hidden here. Settling the
+old reading would mean loading the `Old_Support/` weights again beside
+something else and watching /proc/meminfo, and nothing on this box wants those
+weights. Root is still the price of reading the pages directly.
+
+And decode is not one number, which supersedes the 43.4/43.5 bullet above:
+guvo core runs a built-in prompt-lookup drafter whatever `--speculative` says -
+it appears in `draft_accepted`/`draft_proposed` beside its own `lookup_*` fields
+- and acceptance sets the rate. Measured the same night: copy-heavy rewrite
+61.7 tok/s at 96.0% lookup acceptance, JS-to-TypeScript 43.7 at 87.0%, chat 42.4
+and 43.1 on the shapes that draft little. Attaching the DSpark drafter instead
+crowds lookup out (2 tokens proposed against 190) and moved copy-heavy to 38.8
+tok/s at 62.8% acceptance while leaving code at 43.7 - so the flag is off, and
+its vendor's copy-heavy x2.23 is not this box. Caveats: the variants generated
+different lengths (727, 342, 246 tokens), one stream each, both on the
+serial-fallback plan.
+
 ## 5. What the hipfire image switch measured, and what it left open
 
 The four `hipfire-*` entries now run upstream's `ghcr.io/warpfront/hipfire:0.4.7`
