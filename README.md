@@ -8,7 +8,7 @@ it.
 
 Three engines, each with its own flag set and mount list: llama.cpp via the
 `run` macros, gufo via `gufo_run` / `gufo_ds41_run`, and hipfire via
-`hipfire_run`. 17 models route across them.
+`hipfire_run`. 16 models route across them.
 
 ## Files
 
@@ -35,7 +35,7 @@ host-specific. From inside a distrobox the package is not at `/usr/bin` but the
 host's copy is, so name it: `/run/host/usr/bin/llama-swap`.
 
 ```sh
-llama-swap -config config.yaml -validate            # 17 models, or it refuses
+llama-swap -config config.yaml -validate            # 16 models, or it refuses
 systemctl --user daemon-reload && systemctl --user restart llama-swap
 curl -s localhost:8080/logs                         # wait for Health check passed
 ```

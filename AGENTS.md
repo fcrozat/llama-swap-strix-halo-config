@@ -134,8 +134,10 @@ being evicted - two rows of the first sweep were void that way. And take a
 repeat: qwen3.8-27b measured 54883, then 54674 with its 17 GiB of weights
 already in the page cache, 0.4% apart, which is what shows the trough is the
 resident set and not cached file reads. Settled and trough agreed on every row
-of that sweep, so llama.cpp commits KV at init and `--ctx-size` - 131072 in the
-run macro - sets the bill before a token is read. `TODO.md` §1 has the table.
+of that sweep, so llama.cpp commits KV at init and `--ctx-size` sets the bill
+before a token is read - 131072 in the run macro through that sweep, and 65536
+since 2026-11-24, which is why the claims that sweep produced are owed a redo
+(`TODO.md` §2). `TODO.md` §1 has the table.
 
 Read the label though: hipfire's `free_after_weights=` is memory still free, not
 a weight size. Its KV is `vmm` - the load says `0 MiB committed at load` and

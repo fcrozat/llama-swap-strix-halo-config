@@ -71,15 +71,18 @@ laya was 35x over-claimed - its file is 429 MiB. The config now carries these
 figures, each with the method beside it.
 
 What the numbers say is that `--ctx-size` is the bill, not the weights. The run
-macro asks for 131072 tokens and llama.cpp commits the KV at init - settled and
-trough agree on every row - so a dense 27B pays ~36 GiB of KV whatever it is
-asked to read: 17 GiB of weights measured 54883, 30 GiB measured 67818. The
-sparse-attention MoE pays ~10 GiB for the same context. laya gets clamped to
-`n_ctx_slot 8192` ("the slot context (131072) exceeds the context the model can
-serve") and so costs about a gigabyte. openjev-q4 holds 28046 without ever
-running a token, because it refuses the request (below). Reduction is the lever:
-`gufo_serve_tail` already carries `--context 131072` for the gufo side and
-lowering either one buys back a model's worth of pool per entry.
+macro asked 131072 when these were measured and llama.cpp commits the KV at init
+- settled and trough agree on every row - so a dense 27B pays ~36 GiB of context
+state whatever it is asked to read: 17 GiB of weights measured 54883, 30 GiB
+measured 67818. The sparse-attention MoE pays ~10 GiB for the same context.
+laya gets clamped to `n_ctx_slot 8192` ("the slot context ... exceeds the
+context the model can serve" - the parenthetical names whatever the macro asks
+for, which is 65536 since 2026-11-24) and so costs about a gigabyte.
+openjev-q4 holds 28046 without ever running a token, because it refuses the
+request (below). Reduction is the lever, and the llama.cpp half of it is now
+pulled: the macro went to 65536 (§2) with the eight claims still owed a re-sweep.
+What is left is the gufo side, where `gufo_serve_tail` carries `--context
+131072` and lowering it buys back a model's worth of pool per entry.
 
 Two rows came from a load that evicted something and are void - openjev-q4 at
 10:10 (delta 46, one eviction) and laya's baseline in between sweeps - because
