@@ -64,8 +64,10 @@ design, and preload says flash-next should be the warm default.
 ## 3. Give the repo a remote
 
 `main` is local-only with no remote configured, so the recovery notes in
-`loom/README.md` exist on one disk. The publish decision is made; only the
-remote is missing.
+`loom/README.md` exist on one disk. The publish decision is made and so is the
+name: `llama-swap-strix-halo-config`, engine first, then AMD's name for this
+silicon - plain "Strix" is a pentesting tool and a different APU family than
+the gfx1151 here. Only the remote itself is missing.
 
 Audited before publishing, every blob in the history rather than just HEAD (the
 procedure and the checks are `PUBLISHING.md`): no credentials, no emails, no

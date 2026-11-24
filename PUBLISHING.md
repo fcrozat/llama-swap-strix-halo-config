@@ -121,7 +121,8 @@ Then decide. Every hash changed, so the first push is a one-way door: after it
 the history is public and force-pushing is off the table.
 
 ```bash
-gh repo create strix-launchers --public --source=. --remote=origin --push
+gh repo create llama-swap-strix-halo-config --public --source=. \
+    --remote=origin --push
 ```
 
 Finally, delete the bundles once the rewrite is confirmed good - each one is a
