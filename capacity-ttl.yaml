@@ -408,10 +408,12 @@ models:
     proxy: http://localhost:${PORT}
     # Measured twice, 10:17 and 10:46: 1021 and 1130 MiB, on a load that never
     # answered anything. The file is 429 MiB, llama.cpp clamps its slot to
-    # n_ctx_slot 8192 ("the slot context (131072) exceeds the context the model
-    # can serve"), and a decision model gets no prompt cache by default, so
-    # this cannot grow into the 40000 it used to claim. Headroom over weights
-    # plus 8192 tokens, not a measured driven figure: chat answers 501 and
+    # n_ctx_slot 8192 ("the slot context ... exceeds the context the model can
+    # serve"; that parenthetical said 131072 before the macro came down, and the
+    # clamp is the model's, not the flag's), and a decision model gets no
+    # prompt cache by default, so this cannot grow into the 40000 it used to
+    # claim. Headroom over weights plus 8192 tokens, not a measured driven
+    # figure: chat answers 501 and
     # /v1/systemone wants a `state` plus a non-empty `questions` object.
     capacities: {mem: 2500}
     evict_cost: 1

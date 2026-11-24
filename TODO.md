@@ -32,8 +32,11 @@ follow-through rather than judgement:
    claims still date from 131072, so until they move the config is stricter than
    the hardware on purpose - §2 says why the two cannot be changed in one step.
    Needs a window where our own requests are the only traffic, not exclusivity.
-2. §1's two anomalies measurement did not resolve: `laya` loaded but never
-   driven, and `openjev-q4` refusing every request it has been given.
+2. §1's two remaining anomalies are one thing seen twice: `laya` and
+   `openjev-q4` are decision models, so a chat request is a 501 by design and
+   nobody here has ever driven them through `/v1/systemone`. Either find a client
+   for that schema or drop the pair - both claims are load-time figures, not
+   driven ones.
 3. §2's resident-set question, which the smaller contexts make sharper: ds41 is
    exclusive by construction and preload warms flash-next - which set do we want
    warm?
@@ -147,9 +150,8 @@ clock:
 Verifying a drafted block costs this model more than its acceptance buys, at
 least until something raises the hit rate far past 45%. Speculation is therefore
 closed for this entry on evidence rather than by omission.
-The entry now runs the main model alone at 89000; whether it earns its place
-beside gufo-deepseek is still the open question, and it is a judgement about
-87970 against 112863 rather than about a broken draft.
+The entry ran the main model alone at 89000 up to the paragraph above, which is
+where the judgement landed: out, on duplication rather than on footprint.
 
 `laya` and `openjev-q4` are decision models and nothing here can drive them:
 `/v1/chat/completions` answers 501 "This model is a decision model without text
@@ -248,6 +250,13 @@ what re-sweeping should return: 30 GiB + 65536 x 201 B puts `qwen3.8-27b` about
 being a prediction. An entry that needs the full window says so itself, with one
 `--ctx-size 131072` in its own cmd - not a second one after `${run}`, which
 llama.cpp resolves to the last value while warning that it is deprecated.
+
+Verified on the first `${run}` container after the restart, 16:07: `laya` came up
+with `--ctx-size 65536` in `podman inspect`'s argv and `n_ctx_slot = 8192`, the
+clamp its own entry documents (the model's ceiling, not the flag's). It was
+admitted at 2500 beside a resident flash-next and evicted nothing, then unloaded.
+That is also the cheapest way to check a macro change reaches the family: pick an
+entry whose claim leaves room, not one that would move the warm model.
 
 Open question for the same pass: which models do we actually want resident at
 the same time? gufo-ds41 (122000) is exclusive by construction now, and preload
