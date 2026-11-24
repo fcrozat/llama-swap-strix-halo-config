@@ -437,6 +437,8 @@ models:
     # The file is 429 MiB; llama.cpp clamps the slot to n_ctx_slot 8192 ("the
     # slot context ... exceeds the context the model can serve" - that
     # parenthetical names whatever the macro asks for; the clamp is its own.
+    # The clamp is on the slot only - llama_context still reports n_ctx 65536 -
+    # so the numbers above are what the engine touches, not what it reserves.
     # A decision model, so /v1/chat/completions answers 501 BY DESIGN; the
     # endpoint is /v1/systemone and llama-swap forwards it, taking the model id
     # from the body's "model" field as it does for any other route. Shape, read

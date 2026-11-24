@@ -88,7 +88,9 @@ state whatever it is asked to read: 17 GiB of weights measured 54883, 30 GiB
 measured 67818. The sparse-attention MoE pays ~10 GiB for the same context.
 laya gets clamped to `n_ctx_slot 8192` ("the slot context ... exceeds the
 context the model can serve" - the parenthetical names whatever the macro asks
-for, which is 65536 since 2026-11-24) and so costs about a gigabyte.
+for, which is 65536 since 2026-11-24) and so costs about a gigabyte. The clamp
+is on the slot only: `llama_context` still reports `n_ctx 65536` for it (§2), so
+what a gigabyte says is what that container touches, not what it reserves.
 openjev-q4 held 28046 without ever running a token, because it was never asked
 one (below). Reduction is the lever, and the llama.cpp half of it is pulled
 *and* re-measured: the macro went to 65536 and the six `${run}` rows were
@@ -294,18 +296,43 @@ slope. `Qwen3.8-27B-UD-Q4_K_XL.gguf` is `qwen35`: `block_count 65`,
 `full_attention_interval 4`, `attention.head_count_kv 4`, and `attn_k.weight`
 is `[5120, 1024]` - `n_embd` by `n_kv_heads x head_dim`, that is 4 heads of
 256 - so attention exists in 17 of the 65 blocks and the other 48 are the linear
-path. The macro passes no `--cache-type-k` or `--cache-type-v`, so the cells are
-f16:
+path. The macro pins all of it (`--kv-unified`, `--cache-type-k f16`,
+`--cache-type-v f16`, `--flash-attn on`, `--fit off`), so:
 
     2 (K,V) x 17 layers x 1024 x 2 B = 69632 B/token = 68 KiB/token
     -> 4352 MiB of KV at 65536, 8704 at 131072
 
-The fit says 65536 tokens cost about 13.2 GiB. So KV is a third of the ctx term
-and the other ~9 GiB scales with context without being KV - compute buffers and
-whatever else llama.cpp sizes off `n_ctx`. llama.cpp at this verbosity logs only
-`n_slots = 1, n_ctx_slot = 32768, kv_unified = 'true'`, so that two thirds is
-still unnamed - and the honest reading is that the fit was never fitting one
-thing. The same three numbers off the other files, because they differ by 3x:
+The fit says 65536 tokens cost about 13.2 GiB. So the geometry is a third of the
+ctx term, and what the extra ~9 GiB is got a direct look at on 2026-11-24 at
+20:49 (§2's `-lv 4` window, `laya`) and is not what this section guessed:
+
+- There is no KV allocation line. `-lv 4` really was on - the GGUF metadata dump
+  (50 keys) only prints at that verbosity - and it produced no debug lines at
+  all. The only sizes this build prints are `load_tensors` model buffers, one
+  output buffer, and two `sched_reserve` compute buffers.
+- Compute scratch is not the culprit either: `laya` at `n_ctx = 65536` reserved
+  25.02 MiB (ROCm0) plus 9.01 MiB (ROCm_Host) of compute buffer - 34 MiB, about
+  0.5 B per token of context. Its model buffers were 374.62 plus 52.27 MiB,
+  exactly the 426.88 MiB file.
+
+So the extra two thirds is not compute scratch, and that leaves the KV
+allocation - but not a plain `n_ctx x geometry` reservation either, because
+`laya` is a counter-example on this same engine. Its geometry is 120 KiB/token,
+7680 MiB at 65536, and §1 measured the whole container at 1130 on load and 976
+settled after five questions: about 0.65 GiB of that context is host memory the
+engine touches. A `MemAvailable` delta counts touched pages, not reservations,
+so the same instrument that produced the fit cannot see a reservation it has not
+been made to fault in.
+
+That is why the fit is not retired here. The 27B's 201 KiB/token rests on two
+loads of that entry and nothing else; the candidates for the extra two thirds
+are named, not proven: per-token cells for the 48 GDN blocks under
+`kv_unified`, `context checkpoints enabled, max = 32, min spacing = 8192`, and
+`Flash Attention over K/V rows enabled` - the last two read off the same log.
+Settling it needs two loads of one qwen35 entry at two `--ctx-size` values with
+the pool verified empty, which is the sweep method, not a verbosity flag.
+
+The same three numbers off the other files, because they differ by 3x:
 
 | entry | attention layers of n | KV dim | KiB/token | KV at 65536 |
 |---|---|---|---|---|
@@ -316,9 +343,9 @@ thing. The same three numbers off the other files, because they differ by 3x:
 The ctx lever is therefore worth very different amounts per entry, which the
 tier argued without knowing: halving context costs the 27B four times what it
 costs the 35B-A3B. `laya` is a third shape again - `modern-bert`, 30 blocks of
-fused QKV (`attn_qkv [1024, 3072]`, so MHA at 1024), no interval,
-`context_length 8192` in the file, which is where its clamp comes from - at 120
-KiB/token and 960 MiB of KV at that 8192.
+fused QKV (`attn_qkv [1024, 3072]`, so MHA at 1024), no interval, 120 KiB/token
+- and the 8192 in its file turned out not to be a clamp on what is allocated:
+see the verification below.
 
 What that says about the lever: cutting 131072 to 32768 returns 18.4 GiB - a
 third, not three quarters - and 65536 predicts 9 GiB. Two thirds of the footprint
@@ -330,13 +357,27 @@ still not beside both (131000 against a 124000 ceiling).
 The instrument caveat, because the two figures are not the same kind: the 131072
 numbers are load troughs from this morning's sweep, the 32768 number is free
 memory settled 30 s after a 154-token generation. What makes them comparable is
-§1's own observation that settled and trough agree on every llama.cpp row. A
-`-lv 4` load has a second job now: not the KV size, computed above, but the
-buffer that scales with `n_ctx` and is not KV. The cheapest target is `laya` -
-its KV is predicted at 960 MiB inside a 2500 claim, so like the 16:07 check it
-loads beside a resident flash-next - and it needs the flag in the entry plus one
-restart, because watch-config is off. Predicted against printed KV is the check
-that the geometry above is what the engine really allocates.
+§1's own observation that settled and trough agree on every llama.cpp row.
+
+The `-lv 4` window ran 20:49:12-20:52:32 on `laya` (the flag appended to that
+entry's cmd, one restart, reverted by the same script afterwards) and its
+predicted-versus-printed KV check could not be made: there is no printed KV, as
+above. What it did settle is in the paragraph that asked for it - compute
+scratch is 34 MiB, not 9 GiB - and one thing nobody expected: **the context is
+not clamped.** `llama_context: n_ctx = 65536, n_ctx_seq = 65536` for a model
+whose file says `context_length 8192`. The clamp is on the *slot*:
+`n_slots = 4, n_ctx_slot = 8192`, preceded by `the slot context (65536) exceeds
+the context the model can serve (8192: the training context, or what a linear
+--rope-scale ...)`.
+So a request cannot use beyond the model's ceiling, but the context was
+constructed at 65536 anyway (`sliding_window 128`, `pattern 3`, `causal_attn 0`
+are the other shape facts from that dump). What this does *not* do is put the
+2500 claim in doubt: §1's laya rows are measurements, 1130 on load and 976 after
+five questions, and the claim is the larger plus headroom, which is this file's
+rule. What it does mean is that those rows are what the engine touches and not
+what it reserves, so `laya` was never going to be the check on a KV size - and
+with no KV line to print, that check does not exist on this build at any
+verbosity.
 
 The two pairs the raise below admitted are deliberately not in that window: they
 stay unproven until something actually fails, which is the only evidence worth
@@ -365,12 +406,12 @@ but not both (141000). An entry that needs the full window says so itself, with 
 llama.cpp resolves to the last value while warning that it is deprecated.
 
 Verified on the first `${run}` container after the restart, 16:07: `laya` came up
-with `--ctx-size 65536` in `podman inspect`'s argv and `n_ctx_slot = 8192`, the
-clamp its own entry documents - the model's ceiling, not the flag's: the GGUF's
-`modern-bert.context_length` is 8192. It was admitted at 2500 beside a resident
-flash-next and evicted nothing, then unloaded.
-That is also the cheapest way to check a macro change reaches the family: pick an
-entry whose claim leaves room, not one that would move the warm model.
+with `--ctx-size 65536` in `podman inspect`'s argv and `n_ctx_slot = 8192`. It
+was admitted at 2500 beside a resident flash-next and evicted nothing, then
+unloaded. That is also the cheapest way to check a macro change reaches the
+family: pick an entry whose claim leaves room, not one that would move the warm
+model. What 20:49 corrected is what `n_ctx_slot = 8192` was taken to mean: it is
+the per-request ceiling, not the allocation - the context itself ran at 65536.
 
 **Decided 2026-11-24: this is the resident set.** flash-next stays the warm
 default and ds41 stays exclusive, and the traffic is what tipped it: 72 h of
