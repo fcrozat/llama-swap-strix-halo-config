@@ -282,12 +282,43 @@ deprecate.
 With the pool empty and that model the only thing resident, `MemAvailable` settled
 at 88273 against 124752 empty: **36479 MiB**, where the same entry at 131072 took
 54883 and 54674 the same morning. Two points make a fit rather than a curve:
-**~201 B per token of context, and a constant of about 30 GiB**, of which weights
-and the MTP draft are 17.7 GiB (16.45 + 1.28 on disk). The remaining ~12 GiB is
-compute buffers plus whatever the unified KV pool reserves, and it is not named,
-because llama.cpp at this verbosity logs only `n_slots = 1, n_ctx_slot = 32768,
-kv_unified = 'true'` - no KV size, no buffer size. So this comment is a fit to two
-measurements, not an accounting.
+**~201 KiB per token of context, and a constant of about 30 GiB** - KiB, not the
+`B` this section said until 2026-11-24, when the arithmetic was checked against
+the model file: 65536 x 201 KiB is 12.9 GiB, which with the 30 GiB constant
+lands on the 43900 the fit was verified against, while 201 *bytes* would leave
+the constant doing all the work. Of that constant, weights and the MTP draft are
+17.7 GiB (16.45 + 1.28 on disk).
+
+How much of the slope is KV is readable off the GGUF, and it is less than the
+slope. `Qwen3.8-27B-UD-Q4_K_XL.gguf` is `qwen35`: `block_count 65`,
+`full_attention_interval 4`, `attention.head_count_kv 4`, and `attn_k.weight`
+is `[5120, 1024]` - `n_embd` by `n_kv_heads x head_dim`, that is 4 heads of
+256 - so attention exists in 17 of the 65 blocks and the other 48 are the linear
+path. The macro passes no `--cache-type-k` or `--cache-type-v`, so the cells are
+f16:
+
+    2 (K,V) x 17 layers x 1024 x 2 B = 69632 B/token = 68 KiB/token
+    -> 4352 MiB of KV at 65536, 8704 at 131072
+
+The fit says 65536 tokens cost about 13.2 GiB. So KV is a third of the ctx term
+and the other ~9 GiB scales with context without being KV - compute buffers and
+whatever else llama.cpp sizes off `n_ctx`. llama.cpp at this verbosity logs only
+`n_slots = 1, n_ctx_slot = 32768, kv_unified = 'true'`, so that two thirds is
+still unnamed - and the honest reading is that the fit was never fitting one
+thing. The same three numbers off the other files, because they differ by 3x:
+
+| entry | attention layers of n | KV dim | KiB/token | KV at 65536 |
+|---|---|---|---|---|
+| `qwen3.8-27b`, both quants | 17 of 65 | 1024 | 68 | 4352 MiB |
+| `openjev-q4` | 16 of 64 | 1024 | 64 | 4096 MiB |
+| `qwen3.8-35b-a3b` | 11 of 41 | 512 | 22 | 1408 MiB |
+
+The ctx lever is therefore worth very different amounts per entry, which the
+tier argued without knowing: halving context costs the 27B four times what it
+costs the 35B-A3B. `laya` is a third shape again - `modern-bert`, 30 blocks of
+fused QKV (`attn_qkv [1024, 3072]`, so MHA at 1024), no interval,
+`context_length 8192` in the file, which is where its clamp comes from - at 120
+KiB/token and 960 MiB of KV at that 8192.
 
 What that says about the lever: cutting 131072 to 32768 returns 18.4 GiB - a
 third, not three quarters - and 65536 predicts 9 GiB. Two thirds of the footprint
@@ -300,9 +331,12 @@ The instrument caveat, because the two figures are not the same kind: the 131072
 numbers are load troughs from this morning's sweep, the 32768 number is free
 memory settled 30 s after a 154-token generation. What makes them comparable is
 §1's own observation that settled and trough agree on every llama.cpp row. A
-`-lv 4` load that prints the KV cache size would replace that fit with a
-measurement, and it is the next window to take - chosen 2026-11-24. One verbose
-load, no pool emptied for it, and it retires this comment's arithmetic.
+`-lv 4` load has a second job now: not the KV size, computed above, but the
+buffer that scales with `n_ctx` and is not KV. The cheapest target is `laya` -
+its KV is predicted at 960 MiB inside a 2500 claim, so like the 16:07 check it
+loads beside a resident flash-next - and it needs the flag in the entry plus one
+restart, because watch-config is off. Predicted against printed KV is the check
+that the geometry above is what the engine really allocates.
 
 The two pairs the raise below admitted are deliberately not in that window: they
 stay unproven until something actually fails, which is the only evidence worth
@@ -320,7 +354,7 @@ admits on claims, so a smaller `--ctx-size` changes what a container holds and
 nothing about what the router allows; the entries kept their 131072-era claims
 until re-swept, which left the config deliberately stricter than the hardware for
 about four hours. §1's 17:41-17:51 re-sweep is where that closed, and it checked
-the fit on the way through: 30 GiB + 65536 x 201 B says about 43900 for
+the fit on the way through: 30 GiB + 65536 x 201 KiB says about 43900 for
 `qwen3.8-27b` and the entry measured 41824, and the same fit over-predicted the
 131072 point by a matching 4-5%. So it is a usable lever and a bad claim, and the
 claims now carry measurements instead. Two dense 27Bs are therefore 84000 of pool
@@ -332,8 +366,9 @@ llama.cpp resolves to the last value while warning that it is deprecated.
 
 Verified on the first `${run}` container after the restart, 16:07: `laya` came up
 with `--ctx-size 65536` in `podman inspect`'s argv and `n_ctx_slot = 8192`, the
-clamp its own entry documents (the model's ceiling, not the flag's). It was
-admitted at 2500 beside a resident flash-next and evicted nothing, then unloaded.
+clamp its own entry documents - the model's ceiling, not the flag's: the GGUF's
+`modern-bert.context_length` is 8192. It was admitted at 2500 beside a resident
+flash-next and evicted nothing, then unloaded.
 That is also the cheapest way to check a macro change reaches the family: pick an
 entry whose claim leaves room, not one that would move the warm model.
 
