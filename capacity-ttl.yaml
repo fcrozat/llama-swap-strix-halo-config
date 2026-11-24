@@ -4,6 +4,24 @@ healthCheckTimeout: 900
 includeAliasesInList: true
 startPort: 10001
 
+# What a model can do comes from one of two places: a `capabilities` block
+# here, or discovery - llama-swap asks the engine the first time the model
+# becomes ready and keeps the answer in its SQLite store, which is ":memory:"
+# unless store.path names a file (internal/store/sqlite openDB). With no store
+# the listing resets to nothing on every restart: after the 20:49 restart on
+# 2026-11-24 only the preload and the one model a test had loaded at 20:52
+# reported anything in /v1/models, and the webui showed no badge for the other
+# 17. Cached values expire after 30 d but are rewritten on every load, so a
+# model in use never loses them.
+# The parent directory must exist before the restart: -validate refuses a
+# store.path whose parent is missing ("directory ... is not writable: no such
+# file or directory") and llama-swap does not create it, so a forgotten mkdir
+# fails the unit at startup instead of falling back to memory. Side effect
+# worth knowing: /api/metrics/activity history now survives a restart, which
+# is the store's documented purpose. Bodies stay out - persistCaptures is off.
+store:
+  path: ${env.HOME}/.local/share/llama-swap/llama-swap.db
+
 # capacity is only reclaimed when a process actually stops
 globalTTL: 900
 # podman stop is slower than a signal; 10s (the default) can force-kill mid-shutdown
@@ -261,6 +279,16 @@ models:
     # default), so this is not a cache that will shrink. At 112000 of the
     # 124000 pool it can share with the cheapest claim (9000) and nothing else
     # - close to what really happens today.
+    # Not discoverable on this engine: llama-swap reads a context length from
+    # gufo's /v1/models and nothing else, so the --mmproj above was invisible
+    # and the listing said text->text even while loaded. Claimed on evidence,
+    # not on the flag: a 64px red PNG asked through the swap came back "Red",
+    # 127 prompt tokens, 1.19 s, flash-next already resident. tools stays off -
+    # no tool call is proven here, and a claimed capability is a client sending
+    # requests that fail.
+    capabilities:
+      in: [text, image]
+      out: [text]
     capacities: {mem: 112000}
     # no ttl key: inherits globalTTL 900 (ttl -1 = inherit, 0 = never unload)
     evict_cost: 50
@@ -347,6 +375,11 @@ models:
     # sessions=4 over context 131072, speculative=off, load 13.2 s, decode 43.5
     # tok/s, and vision proven the only way that counts - a 64px red PNG came
     # back "Red".
+    # Same blind spot as flash-next above, same proof (the red PNG recorded on
+    # the measurements block), and this is the route that carries --mmproj.
+    capabilities:
+      in: [text, image]
+      out: [text]
     capacities: {mem: 57000}
     # 12 s to bring back against flash-next's 61 s, so it is the one that leaves
     evict_cost: 30
@@ -369,6 +402,15 @@ models:
     proxy: http://localhost:${PORT}
     # 14937 weights + 34816 B/tok x 262144 (8704) + 1746 prefill/checkpoints +
     # 1810 dflash draft + ~420 vision staging and activation reserve = 27617.
+    # These four can never be discovered, loaded or not: hipfire identifies
+    # itself in /v1/models but reports no context length, so its prober takes
+    # the listing only. 262144 is what every tag here serves - none of them
+    # cap max_seq - the same number the mem claim above multiplies out per
+    # token. tools unset: unproven, same rule as the gufo entries.
+    capabilities:
+      in: [text]
+      out: [text]
+      context: 262144
     capacities: {mem: 29000, npu: 1}
     evict_cost: 30
 
@@ -383,6 +425,11 @@ models:
     # 18139 weights + 10880 B/tok x 262144 (2720) + 2793 prefill/checkpoints =
     # 23652. The 462 MiB .mtp next to it is not claimed: the load says spec off.
     # Was 32000, which spent 7 GiB of pool on a buffer that does not exist.
+    # listing-only prober; see hipfire-27b for why and for the number
+    capabilities:
+      in: [text]
+      out: [text]
+      context: 262144
     capacities: {mem: 25000, npu: 1}
     evict_cost: 30
 
@@ -396,6 +443,11 @@ models:
     proxy: http://localhost:${PORT}
     # hipfire plans 3.2 GiB of weights for a 2468 MiB file, plus 17408 B/tok x
     # 262144 (4352) and 1251 of prefill scratch = 8973. Was 8000.
+    # listing-only prober; see hipfire-27b
+    capabilities:
+      in: [text]
+      out: [text]
+      context: 262144
     capacities: {mem: 9000, npu: 1}
     evict_cost: 5
 
@@ -419,6 +471,11 @@ models:
     # plan says flash-next it means gufo-flash-next (TODO.md §2). The claim
     # stays composed-and-high either way, because the router still has to
     # refuse honestly when someone does ask for this quant.
+    # listing-only prober; see hipfire-27b
+    capabilities:
+      in: [text]
+      out: [text]
+      context: 262144
     capacities: {mem: 95000, npu: 1}
     evict_cost: 30
 

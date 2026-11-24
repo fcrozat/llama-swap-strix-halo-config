@@ -32,13 +32,29 @@ To free memory with no config change, unload one model instead -
 2. Edit `capacity-ttl.yaml` (`config.yaml` is a symlink to it; keep it one), then
    validate with the package binary - `/usr/bin/llama-swap` on the host,
    `/run/host/usr/bin/llama-swap` inside a distrobox - done when it prints
-   `config is valid: N model(s)` with N moved by exactly what was added.
+   `config is valid: N model(s)` with N moved by exactly what was added. If the
+   edit touches `store.path`, `mkdir -p` its directory first: `-validate` refuses a
+   missing parent (`directory ... is not writable: no such file or directory`) and
+   llama-swap creates no directory, so the unit fails at startup rather than
+   falling back to a memory store.
 3. `systemctl --user daemon-reload && systemctl --user restart llama-swap`, then
    wait for the preload's `Health check passed` in `curl -s localhost:8080/logs`;
    the box is not usable before that.
 4. Confirm the id and its alias in `/v1/models`, and commit - the history is this
    file's changelog, one commit per behaviour change, explaining the number rather
    than just the edit.
+
+What the webui badges a model with comes from two places: a `capabilities` block in
+its entry, or discovery when it first becomes ready, cached in the SQLite store at
+`store.path` for 30 d and rewritten on every load. With no `store` that cache is
+`:memory:`, so a restart blanks every badge until each model is used again - which
+is what the listing looked like on 2026-11-24. Two engines cannot answer the
+question about themselves at all, so their blocks are the only source there. Gufo is
+read for a context length only, which is why the `--mmproj` entries claim
+`in: [text, image]` by hand, and hipfire reports no context length at all, so its
+prober takes the listing only. `tools` stays unset on all of them: no tool call
+is proven on this box, and the rule above applies - a claim is a client sending
+requests that fail.
 
 Health is `/health` (swap) and `/ready` (a loaded engine). `/api/version` gives
 the build actually running - `version`, `commit`, `build_date` - which is how a
