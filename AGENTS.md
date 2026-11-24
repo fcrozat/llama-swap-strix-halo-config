@@ -81,8 +81,8 @@ means, the five surfaces to grep, the `filter-repo` traps (`--replace-text`
 reaches blobs only; binaries are skipped whole), and why the tip needs
 hand-writing after a substitution. Every hash changes, so a first push is a
 one-way door, so audit again before pushing. `TODO.md` §3 records what the last
-audit found and that no remote is configured yet; `PUBLISHING.md` ends with the
-`gh repo create` line.
+audit found and how the first push went; `PUBLISHING.md` ends with the
+`gh repo create` line for a box that has no remote yet.
 
 ## Memory: measured, not guessed
 
@@ -121,6 +121,42 @@ under-claims. For hipfire the claim is the full-context worst case, built from
 its own lines: weights + `kv_bytes_per_token` x `max_seq` + prefill scratch +
 draft/vision. That is a second method beside the delta, and it is worth saying
 which one a number came from.
+
+## Measuring without other clients in the sample
+
+`:8080` on the wildcard address means the LAN and the tailscale interface share
+the engine mid-measurement, so a delta or a tok/s figure can carry someone
+else's queue - `gufo_sessions` batches four of them together. Pin the swap to
+loopback for the window with a drop-in nothing tracks. It has to be a drop-in:
+the unit's own `Environment=LISTEN=:8080` beats the manager environment, so
+`systemctl --user set-environment` changes nothing.
+
+```sh
+D=${XDG_RUNTIME_DIR}/systemd/user/llama-swap.service.d/loopback.conf
+mkdir -p "${D%/*}"
+printf '[Service]\nEnvironment=LISTEN=127.0.0.1:8080\n' > "$D"
+systemctl --user daemon-reload && systemctl --user restart llama-swap
+# afterwards, for everyone again:
+rm "$D" && systemctl --user daemon-reload && systemctl --user restart llama-swap
+```
+
+Under `$XDG_RUNTIME_DIR` on purpose: a reboot clears it, so a forgotten lock
+cannot outlive the window. Prove it took twice - `systemctl --user show
+llama-swap -p Environment` prints the loopback value, and a request to any other
+address of the box, its LAN one or its tailscale one, refuses while
+`localhost:8080/health` answers 200. A distrobox keeps working, because pasta
+forwards the container's localhost to the host loopback; that is what lets a
+shell in here measure a box shut to everything else.
+
+It costs both monitoring jobs, not one. The `llama-swap` job (the `/metrics`
+scrape of `host.containers.internal:8080`) goes `up == 0` straight away. The
+`llama-swap-activity` exporter polls the same address, so it keeps serving its
+last state, logs `poll failed ... Connection refused` every 10 s, and trips its
+`last_poll_timestamp > 180` rule - which is expected for the window, not a
+fault. If an agent runs this while it is served by the box itself, a detached
+watchdog that probes `127.0.0.1:8080` and removes the drop-in on failure is
+cheap insurance: the same forwarding that lets it measure is the only thing
+keeping its own session alive.
 
 ## Engines and their flag sets
 

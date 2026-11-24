@@ -33,7 +33,10 @@ All ten sit under 48000, which is the interesting property.
 
 For each: the `load_started` -> `load_completed` delta (AGENTS.md, Memory),
 noted against the sessions and context it was loaded with, taken on a load that
-evicted nothing - otherwise the number is the swap, not the model.
+evicted nothing - otherwise the number is the swap, not the model. Take it with
+the swap pinned to loopback (AGENTS.md, *Measuring without other clients in the
+sample*): one request from a laptop lands in the same `--sessions 4` batch as
+the probe, and the number stops being the model's.
 
 The ceiling those ten are measured against was settled on 2026-11-24, and not in
 the direction the config comment asked for. It was 118000, a placeholder at
