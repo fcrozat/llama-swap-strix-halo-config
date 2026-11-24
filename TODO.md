@@ -71,7 +71,14 @@ taken inside measurement windows and one 502 for a request that was in flight.
 It follows that a batch script which detaches and is waited on by a separate
 tool call cannot measure anything here - returning from the wait is itself a
 model request - so a sweep has to be one synchronous call, and a row is only
-good while the journal shows no foreign `capacity:` line.
+good while the journal shows no foreign `capacity:` line. Even synchronous is not
+enough when that session is busy: the 13:28 window was clean of our own requests
+and still voided both rows, twice evicted by traffic that wanted the preload
+model back. A probe is the dangerous case rather than the merely inaccurate one,
+because llama-swap does not know what an unmanaged container holds and will
+happily load 112000 of pool onto a box where a probe already took 88 GiB - the
+sweep therefore stops its own probe attempt and says so when the pool is not
+empty (24753 MiB free at 13:33), rather than double-booking the machine.
 
 `deepseek-v4-flash` does not load at all. llama-server exits while opening the
 5.6 GiB draft: `failed to load model: unknown model architecture:
@@ -260,7 +267,26 @@ uploaded, so a gufo entry measured after it settles under-reads 7x - the host
 figure at that point is the staging buffers, not the model. Hence the rule for
 this family: the larger of the two figures at `load_completed`, never a settled
 one. What would actually close it is a second model loaded beside inkling with
-/proc/meminfo watched the whole way, which needs a window nobody is using.
+/proc/meminfo watched the whole way - and exclusivity, or the answer never
+arrives. The attempt at 13:28 was clean of our own requests and still voided both
+rows: `capacity: model=gufo-flash-next evict=[gufo-inkling]` inside the inkling
+window, `evict=[qwen3.8-27b]` inside the second-model window. Both measure an
+eviction of the thing being measured, and a model that survives about 45 seconds
+under that traffic cannot be made co-resident on demand.
+
+Reading the pages instead of arguing about them does not work from inside a
+container either. A watcher caught the gufo pid on the host six seconds into a
+load and then found `smaps_rollup: Permission denied` (uid 1000 in here is not
+uid 1000 out there), `0::/../libpod-<id>.scope` as the cgroup - unreadable at that
+path - and `podman stats --no-stream` reporting `0B / 133.6GB` for a process
+holding 41 GiB. That is the RSS blind spot from AGENTS.md confirmed for cgroups
+and podman stats too: MemAvailable is the only instrument here that sees this
+memory, and it disagrees with the engine by 15 GiB.
+
+So 57000 stays, chosen because the other choice admits neighbours onto memory
+that may already be gone. Three loads agree with each other (41208, 41064 and
+41038 MiB of host against 56348 device, every time), so the gap is a property of
+the accounting rather than of a lucky run.
 
 Also open on that entry:
 

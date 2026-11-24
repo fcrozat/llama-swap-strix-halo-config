@@ -198,6 +198,14 @@ model request out of the window, and read a `capacity: model=... evict=[...]`
 line dated inside that window as grounds to void the row: something else wanted
 a model while you were measuring.
 
+An unmanaged probe container is worse than inaccurate, it is unsafe: the router's
+pool arithmetic cannot see what a container it did not start is holding, so it
+will load 112000 of managed pool onto a box where a probe has already taken
+88 GiB. So a probe measures only from a pool verified empty, and the sweep says
+so out loud when it refuses one (`24753 MiB free at 13:33`), with a guard that
+stops a reloaded `ls-*` container for the length of the probe rather than letting
+both land.
+
 ## Engines and their flag sets
 
 Three run macro families (`run`, `gufo_run` / `gufo_ds41_run`, `hipfire_run`)
