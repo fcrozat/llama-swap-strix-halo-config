@@ -159,6 +159,13 @@ loopback for the window with a drop-in nothing tracks. It has to be a drop-in:
 the unit's own `Environment=LISTEN=:8080` beats the manager environment, so
 `systemctl --user set-environment` changes nothing.
 
+`./run-mem-sweep.sh` is that window scripted end to end - dry run by default, and
+with `--run` it pins, proves the pin against every non-loopback address, refuses
+to measure a pool it cannot see empty, voids a row when a foreign `capacity:`
+line lands inside its window, and unpins on a trap even if it is killed mid-run.
+Prefer it to a hand-rolled batch. The recipe below stays because the script can
+die between the pin and the trap, and then the cleanup is yours by hand.
+
 ```sh
 D=${XDG_RUNTIME_DIR}/systemd/user/llama-swap.service.d/loopback.conf
 mkdir -p "${D%/*}"

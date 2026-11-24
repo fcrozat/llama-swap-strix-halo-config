@@ -19,8 +19,9 @@ Three engines, each with its own flag set and mount list: llama.cpp via the
 | `run-llama-swap.sh` | what the systemd unit runs |
 | `llama-swap.service` | user unit, symlinked into `~/.config/systemd/user/` |
 | `run-gufo.sh`, `run-hipfire.sh`, `run-kyojin.sh`, `run-strix-llama.sh` | one per engine; each documents itself in its header |
+| `run-mem-sweep.sh` | measures what an entry costs and prints the capacity to write; dry run by default |
 | `AGENTS.md` | orientation for an agent working in this tree |
-| `TODO.md` | open items, and which capacities still rest on a guess |
+| `TODO.md` | open items, the decisions that closed the earlier ones, and the measurements underneath both |
 | `PUBLISHING.md` | auditing and rewriting history before a repo becomes public |
 | `capacity-old.yaml`, `simple-routing.yaml` | earlier layouts, kept for reference |
 
