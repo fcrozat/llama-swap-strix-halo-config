@@ -5,28 +5,40 @@ to apply a config change without taking the agent's own model down, how to
 measure what a model really costs, and what belongs to the distro package rather
 than to this tree.
 
-Measured 2026-11-22. Of the eighteen entries, three carry a number from the host
-delta: gufo-flash-next 112000 (111.8 GiB), loom-inkling 70000 (69.9 GiB),
-gufo-inkling 47000 (40864 MiB, with its projector). Four - the `hipfire-*`
-set - are composed from the engine's own load lines, which is a different method
-and says so in the entry (section 5). The other eleven are still claims, and
-flash-next was 3.3x under-declared until someone measured it, so assume the
-eleven are too.
+Measured 2026-11-22 through 2026-11-24. Of the eighteen entries, four carry a
+number from the host delta: gufo-flash-next 112000 (111.8 GiB), gufo-inkling
+47000 (40864 MiB, projector included), gufo-ds41 114000 against 122002 measured
+(the first entry found claiming less than it costs - §2), and loom-inkling
+70000 against 52867 on the path it runs now (§1). Four - the `hipfire-*` set -
+are composed from the engine's own load lines, which is a different method and
+says so in the entry (section 5). The other ten are still claims, and
+flash-next was 3.3x under-declared until someone measured it, so assume the ten
+are too.
 
 ## 1. Measure the eleven entries that are still guesses
 
-gufo-ds41 114000, qwen3.6-27b-q8 45000, qwen3.8-27b-q8 45000, laya 40000,
-ornith-35b-a3b 34000, qwen3.8-35b-a3b 34000, gufo-27b 30000, qwen3.8-27b 30000,
-gufo-deepseek 26000, deepseek-v4-flash 26000, openjev-q4 26000.
+qwen3.6-27b-q8 45000, qwen3.8-27b-q8 45000, laya 40000, ornith-35b-a3b 34000,
+qwen3.8-35b-a3b 34000, gufo-27b 30000, qwen3.8-27b 30000, gufo-deepseek 26000,
+deepseek-v4-flash 26000, openjev-q4 26000.
 
-gufo-ds41 first: it is the largest single claim on the box and has never been
-loaded here at all.
+gufo-ds41 left this list on 2026-11-24, when its first load here measured
+122002 against the declared 114000. What is open about it is no longer a
+measurement, so it moved to §2.
 
-All ten except ds41 sit under 48000, which is the interesting property.
+All ten sit under 48000, which is the interesting property.
 
 For each: the `load_started` -> `load_completed` delta (AGENTS.md, Memory), noted
-against the sessions and context it was loaded with. Then re-check the 118000
-pool ceiling against 124.4 GiB of physical RAM.
+against the sessions and context it was loaded with, taken on a load that
+evicted nothing - otherwise the number is the swap, not the model. Then re-check
+the 118000 pool ceiling against 124.4 GiB of physical RAM.
+
+One entry needs the opposite correction. loom-inkling declares 70000, set from
+the Nix Loom binary's 71509; the gufo-0.36 path it runs now measured 52867 and
+52911 on two cold loads with the pool free. It can come down to about 61000,
+but not to the bare delta: the entry passes no `--cache-ram-bytes`, so its RAM
+cache still has room to grow toward the 32 GiB auto cap on top of what a short
+probe found resident - the same arithmetic behind gufo-inkling's 47000. Pin the
+cap, then re-measure, then lower the claim; both halves are one restart.
 
 Why: loom-inkling at 70000 is allowed to share the pool with anything declared
 under 48000, which is all ten of them. If any holds more than declared, that
@@ -61,13 +73,41 @@ Open question for the same pass: which models do we actually want resident at th
 same time? gufo-ds41 (114000) and loom-inkling (70000) are each exclusive-ish by
 design, and preload says flash-next should be the warm default.
 
+### gufo-ds41 decided this section, 2026-11-24
+
+Its first load here, on a pool that was free, took host available
+124455 -> 2453 = 122002 MiB: 2 sessions, 131072 context, `--stream-experts`,
+dspark draft, disk cache enabled, 133.9 s to `load_completed`, and
+`gpu_device_used_mib` 120143 of 122880. Three things follow.
+
+- The declared 114000 is 8002 MiB under what the model takes, and the pool
+  allows 118000, so llama-swap is today permitted to start a model this box
+  cannot hold. 2453 MiB left is not a margin, and the expert cache grows with
+  use rather than stopping at the number.
+- Writing the true figure is not the fix. At `mem: 122000` the entry exceeds
+  the pool outright and llama-swap refuses to load it, which trades a near-OOM
+  for a model nobody can ask for. The choice is the ceiling or the footprint,
+  not the digit.
+- Ceiling: holding ds41 alone with room means `pools.mem` above 122000, past
+  95% of the 127386 MiB this box has, with the monitoring containers and page
+  cache living in the remainder. Footprint: `--sessions 2` is already the small
+  set, so what is left is `--context` and whatever `--stream-experts` sizes its
+  cache from - measure the delta after changing one of them rather than
+  predicting it, and note that 122002 at 131072 x 2 is roughly 46 GiB per
+  session of context state, which says the context is where the memory is.
+
+Until one of those is chosen, `gufo-ds41` is the entry whose declared number is
+known to be wrong in the direction that matters.
+
 ## 3. Give the repo a remote
 
-`main` is local-only with no remote configured, so the recovery notes in
-`loom/README.md` exist on one disk. The publish decision is made and so is the
-name: `llama-swap-strix-halo-config`, engine first, then AMD's name for this
-silicon - plain "Strix" is a pentesting tool and a different APU family than
-the gfx1151 here. Only the remote itself is missing.
+Done 2026-11-24: `origin` is
+`https://github.com/fcrozat/llama-swap-strix-halo-config` and `main` is pushed.
+What remains of this section is the tail of it - the two safety bundles below,
+and re-auditing before any force-push, since the first push closed that door.
+The name was chosen as recorded here: `llama-swap-strix-halo-config`, engine
+first, then AMD's name for this silicon - plain "Strix" is a pentesting tool and
+a different APU family than the gfx1151 here.
 
 Audited before publishing, every blob in the history rather than just HEAD (the
 procedure and the checks are `PUBLISHING.md`): no credentials, no emails, no
@@ -83,17 +123,19 @@ History rewritten first, with every commit kept: llama-swap's own `README.md`,
 tracked before being gitignored and the third because its MIT text carries
 upstream's copyright, not this tree's. Every hash changed. The `loom/gufo`
 symlinks still appear in the older commits - they point at a `/nix/store`
-output, which is a build id and not a secret. A second pass then rewrote the
+output, which is a build id and not a secret, and the files themselves are gone
+from the tip now (§6). A second pass then rewrote the
 local account name out of every blob and every commit message: config paths read
 `${env.HOME}`, which llama-swap substitutes for real, and the comments address
 the reader as `$USER`.
 
-What a clone gets is 18 files and 95 KiB (the `config.yaml` symlink counted as
+What a clone gets is 16 files and 111 KiB (the `config.yaml` symlink counted as
 a link, not twice as its target): no binaries, no weights, no upstream
 docs, and no local account name anywhere in the object store. Two safety bundles
 sit in the home directory, both taken before the scrub, so both still carry the
 name - `launchers-pre-rewrite.bundle` additionally carries the upstream docs.
-Both go once this history is confirmed good.
+Both are still on disk as of 2026-11-24 and go once the published history has
+been read back from the remote and confirmed good.
 
 ## 4. What the first inkling2 load left open
 
@@ -221,7 +263,40 @@ Also open on this engine:
   not offer. At 66000 it is the first flash-next that could share the 118000
   pool with anything, which is the question section 2 asks about the gufo entry.
 
-## 6. Serve Inkling on Loom from the toolbox image, without Nix
+## 6. Inkling on Loom: closed, the package never needed Loom
+
+Closed 2026-11-24, and not the way this section was written. The image serves
+`inkling-2-mini-loom` with no loom module at all: `serve llm --model
+inkling-2-mini-loom` resolves the package directory, reads its
+`llm_config.json` (arch `inkling2`, `Inkling-2-Mini-UD-Q4_K_XL.gguf`, vocab
+200058) and loads that GGUF on gufo's own inkling2 support - which is the arch
+`gufo-inkling` reaches through its module. The load line says so
+(`kind=text artifact=/models/inkling-2-mini-loom`, `vocabulary_tokens=200058`)
+while `model list` still calls the same id `installed, no loaded extension
+offers it`: that line answers "which extension advertises this id", and it was
+never the reason a second binary was in use.
+
+Measured through llama-swap, pool free both times, 4 sessions at 131072:
+124109 -> 71242 = 52867 MiB and 124146 -> 71235 = 52911 MiB, 10.7 s and 8.3 s to
+`load_completed`, 45.7 tok/s. Two things the Nix binary did differently, both
+visible in one line: it took 71509 MiB because Loom sized the package's own
+1048576-token pool, and it ran with a draft (`draft acceptance 74.6%`) where
+this path reports `speculative=off`. Decode measured the same either way (45.7
+against 45.2 tok/s on a 20-token completion), so the draft is not worth its
+18 GiB at that length - whether a long generation separates them is unmeasured.
+Neither the sandbox nor a missing symbol was ever the question the bullets below
+were circling.
+
+What went: `loom_pod`, `loom_image`, `loom_dir`, `loom_serve_llm` from the
+macros, and `nix-loom-build.sh`, `nix-loom-gufo.sh`, `loom/README.md` plus the
+`loom/` symlinks with them. Engines are three families now (AGENTS.md).
+What stays is the 5.9 GiB `gufo-nix` volume, referenced by nothing: it is the
+only thing that can bring that binary back, and `podman volume rm gufo-nix` is
+the reclaim once this path has survived a few pulls. `--replace-builtin` is
+still untested and moot while the core loader answers.
+
+The record of the module attempt, kept because the health-check trap in it is
+not about Loom at all:
 
 `ghcr.io/gufo-org/toolboxes/gufo-runtime:latest` is gufo 0.36.0 (`4a7d8c6`) on
 extension API 0.3.42. Both installed modules had been skipped since that pull:
@@ -234,8 +309,8 @@ the same for `inkling2` while `/ready` kept answering 200.
 `deepseek41flash` option rather than a core one.
 
 The Nix build (the 5.9 GiB `gufo-nix` volume, `nix-loom-build.sh`,
-`nix-loom-gufo.sh` and the two `loom/` symlinks) exists because loom wanted API
-0.3.35 and the image had 0.3.20. Measured against a scratch store
+`nix-loom-gufo.sh` and the two `loom/` symlinks) existed because loom wanted API
+0.3.35 and the image then had 0.3.20. Measured against a scratch store
 (`EXT_DIR=/tmp/gufo-ext-probe`, so the live store never saw it):
 
 - The image ships the dependency: `libloom_text_embed.so`, plus a
@@ -252,7 +327,8 @@ The Nix build (the 5.9 GiB `gufo-nix` volume, `nix-loom-build.sh`,
   `no loaded extension offers it`. That is the whole remaining gap: upstream
   added Inkling-2-Mini in loom 0.3.7, the image bundles 0.3.6.
 
-Then the load test, which is the answer: no. `loom-inkling` was repointed at
+Then the load test with the module seated, which answered the question as it was
+posed then: no. `loom-inkling` was repointed at
 `${gufo_pod} --env GUFO_MODELS_DIR=/models ${gufo_image} ${gufo_serve_llm}
 --model inkling-2-mini-loom`, validated (`config is valid: 18 model(s)`) and
 asked for through the swap - which evicted `gufo-flash-next` to make room, so
@@ -273,7 +349,8 @@ Three attempts, identical each time: about 230 ms from `container start` to
   for Loom's reservation. Run by hand with that flag on and the pool free it
   segfaulted in the same 227 ms, so the flag is not what the Nix binary
   supplies. Whether a working module would still want it is unknown - the
-  crash is before any device work - and `loom_pod` keeps passing it.
+  crash is before any device work. Nothing passes it now: `loom_pod` went with
+  the rest of the Nix path.
 - Not a link mismatch: the module wants 42 `loom*` symbols, the image's
   `libloom_text_embed.so` exports 47, and none of the 42 are missing.
 - `--replace-builtin` is the variable left untested. It seats the module where
@@ -297,13 +374,38 @@ Three attempts, identical each time: about 230 ms from `container start` to
   every gufo entry, which is how it should stay - a module that segfaults has
   no business shadowing the built-in provider in a store all six gufo entries
   mount. `/tmp/gufo-ext-probe` (8.7 MB) can go too.
-- `loom-inkling` is back on the Nix binary and measured on the way back:
+- The intermediate state, back on the Nix binary, measured
   `load_started 124602 -> load_completed 53093` = 71509 MiB at 4 sessions /
   131072, within 61 MiB of the `124910 -> 53340` already recorded above the
-  entry, so `mem: 70000` is twice-measured now. 11.2 s to `load_completed`,
-  then 45.2 tok/s decode, ttft 208.7 ms, draft acceptance 74.6%.
-- If a retry ever serves, adoption is: point `loom-inkling` at `${gufo_pod}
-  ${gufo_image} ${gufo_serve_llm}` with `--env GUFO_MODELS_DIR=/models`, then
-  drop both nix scripts, `loom_pod`, `loom_serve_llm` and `loom/README.md`.
-  The `gufo-nix` volume is the only rollback for a model that has no other
-  Loom-capable binary on this box, so it goes last.
+  entry, so `mem: 70000` was twice-measured when it was set - of that binary,
+  which is why §1 wants it lowered for the path running today. 11.2 s to
+  `load_completed`, then 45.2 tok/s decode, ttft 208.7 ms, draft acceptance
+  74.6%.
+- What adopted instead, with no module involved: `loom-inkling` runs
+  `${gufo_pod} --env GUFO_MODELS_DIR=/models ${gufo_image} ${gufo_serve_llm}
+  ${gufo_sessions} --context 131072 --max-tokens 4096 --model
+  inkling-2-mini-loom` - the ordinary `${gufo_serve_llm}`, the same one the
+  other gufo entries use. What it does not do today is image input:
+  `gufo-inkling` passes `--mmproj` and this entry passes no projector, and
+  nobody has tried whether the core loader would take one. So the two entries
+  are not interchangeable yet - §7 is what this one is for now.
+
+## 7. What `loom-inkling` is for now
+
+Its name and its alias (`Inkling-2-Mini-Loom`) both promise Loom; what runs is
+gufo's own inkling2 loader over the GGUF `gufo-inkling` also serves. Three ways
+out, none of them urgent, all of them the same announced restart:
+
+- Keep it as the module-free fallback and rename it. Its real job changed shape
+  rather than disappearing: it answers on the one condition that breaks
+  `gufo-inkling`, a `podman pull` whose `inkling2` module went stale and got
+  skipped (AGENTS.md, gufo traps). The alias is the part that lies.
+- Fold it into `gufo-inkling`. Same weights, same arch; what distinguishes it
+  today is an explicit `--context 131072`, no projector and no
+  `--cache-ram-bytes` cap.
+- Keep two context shapes on purpose, this one text-only and long, the module
+  one image-capable.
+
+Decide with §1's numbers in hand. 70000 declared for a second copy of a 47000
+model is 18 GiB of the box spent on a name, and the pool is what everything
+else is measured against.

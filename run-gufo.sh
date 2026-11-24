@@ -34,9 +34,11 @@
 # llama-swap mounts the same store too (gufo_ext in config.yaml).
 #
 # A module that links a library the runtime image ships needs
-# CMAKE_PREFIX_PATH, and loom wants it for `install` *and* for the post-pull
-# `ext update`. In the image that library sits at a Nix store path whose hash
-# changes with every build, so look it up instead of recording it:
+# CMAKE_PREFIX_PATH for `install` *and* for the post-pull `ext update`. In the
+# image such a library sits at a Nix store path whose hash changes with every
+# build, so look it up instead of recording it. The loom module was the only
+# thing here that needed it and is gone (TODO.md §6); nothing installed today
+# does, which is why this stays a passthrough rather than a default:
 #   LR=$(podman run --rm --entrypoint /bin/sh "$IMAGE" \
 #        -c 'ls -d /nix/store/*loom-runtime*')
 #   CMAKE_PREFIX_PATH=$LR ./run-gufo.sh ext update   # passed through when set
@@ -189,7 +191,7 @@ if [[ ${1:-} == ext || ${1:-} == extension || ${1:-} == --ext ]]; then
   [[ -n ${GUFO_EXTENSION_REGISTRY:-} ]] \
     && RUN+=(-e GUFO_EXTENSION_REGISTRY="$GUFO_EXTENSION_REGISTRY")
   # and the prefix of a library the image ships, for modules that link one
-  # (loom - see the CMAKE_PREFIX_PATH note at the top)
+  # (the loom module was one - see the CMAKE_PREFIX_PATH note at the top)
   [[ -n ${CMAKE_PREFIX_PATH:-} ]] \
     && RUN+=(-e CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH")
   MNT=()

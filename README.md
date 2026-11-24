@@ -6,9 +6,9 @@ llama-swap routing config plus container launchers for one AMD Strix Halo box
 itself, rootless as uid 1000, each published on `127.0.0.1` so nothing bypasses
 it.
 
-Four engines, each with its own flag set and mount list: llama.cpp via the `run`
-macros, gufo via `gufo_run` / `gufo_ds41_run`, hipfire via `hipfire_run`, and
-Loom via `loom_pod` + `loom_serve_llm`. 18 models route across them.
+Three engines, each with its own flag set and mount list: llama.cpp via the
+`run` macros, gufo via `gufo_run` / `gufo_ds41_run`, and hipfire via
+`hipfire_run`. 18 models route across them.
 
 ## Files
 
@@ -19,7 +19,6 @@ Loom via `loom_pod` + `loom_serve_llm`. 18 models route across them.
 | `run-llama-swap.sh` | what the systemd unit runs |
 | `llama-swap.service` | user unit, symlinked into `~/.config/systemd/user/` |
 | `run-gufo.sh`, `run-hipfire.sh`, `run-kyojin.sh`, `run-strix-llama.sh` | one per engine; each documents itself in its header |
-| `nix-loom-build.sh`, `nix-loom-gufo.sh`, `loom/` | gufo built by Nix, needed only by `loom-inkling` |
 | `AGENTS.md` | orientation for an agent working in this tree |
 | `TODO.md` | open items, and which capacities still rest on a guess |
 | `PUBLISHING.md` | auditing and rewriting history before a repo becomes public |
@@ -46,10 +45,9 @@ pinned in `hipfire_image`, kernel packs for gfx1151 baked in - so `podman pull`
 is the whole install step, and `./run-hipfire.sh --list` prints the tags that
 image knows.
 
-Gufo models need their modules installed (`./run-gufo.sh ext install <name>`).
-The Nix-built gufo that `loom-inkling` runs is built by `loom/README.md`, about
-three minutes; the `loom/gufo` symlinks are local build artifacts and are not in
-this repo.
+Gufo models need their modules installed (`./run-gufo.sh ext install <name>`),
+and `./run-gufo.sh ext update` after every `podman pull`, or gufo skips a module
+built for the old one and its model cannot load.
 
 ## Four things to know before changing anything
 
@@ -64,7 +62,8 @@ config change is an explicit restart, never a file write.
 **Memory is measured, not guessed.** The pool is the binding constraint, not the
 GPU: `capacity.pools.mem: 118000` MiB resident at once, `evict_cost` decides who
 leaves, `globalTTL: 900` reclaims after idle. Take the number from the
-`host_available_mib` delta in `podman logs ls-<id>`. RSS lies - a model reporting
+`host_available_mib` delta in `podman logs ls-<id>`, read on a load that loaded
+alone - if the load evicted something, that delta counts its memory returning. RSS lies - a model reporting
 6.4 GiB of RSS was holding 111.8 GiB, and the rest is kfd device memory no
 container stat shows.
 
@@ -82,7 +81,6 @@ health check.
 ## Not in this repo
 
 llama-swap itself - it is the package above, and nothing unpacks into this
-directory. Model weights stay under `${dir}`. `loom/gufo` and `loom/gufo-server`
-are local build artifacts: absolute symlinks into a `/nix/store` path that only
-exists on this box, which is why `loom/README.md` rebuilds them after a clone.
+directory. Model weights stay under `${dir}`, and the engine images stay in
+podman's store.
 

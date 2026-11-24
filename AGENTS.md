@@ -49,8 +49,8 @@ good ids too, so never treat it as a health check.
 
 `capacity-ttl.yaml` is the live config (`config.yaml` is a symlink to it),
 `capacity-old.yaml` and `simple-routing.yaml` are earlier layouts kept for
-reference, and `run-*.sh` (each documents itself in its header), `nix-loom-*.sh`,
-`loom/`, `README.md`, `TODO.md` and `PUBLISHING.md` are ours; `README.md` is the
+reference, and `run-*.sh` (each documents itself in its header),
+`README.md`, `TODO.md` and `PUBLISHING.md` are ours; `README.md` is the
 public intro the front page renders.
 
 Nothing upstream is vendored, because nothing upstream arrives here: llama-swap
@@ -91,10 +91,18 @@ The pool is the binding constraint, not the GPU -
 once, `evict_cost` decides who leaves, `globalTTL: 900` reclaims after idle, and
 `npu: 1` keeps a single hipfire container on `/dev/accel/accel0`.
 
+Why a model vanished is one grep, and it is also the check on the measurement
+below: `journalctl --user -u llama-swap | grep 'capacity: model='` prints
+`capacity: model=gufo-flash-next evict=[loom-inkling] pools=map[mem:118000 ...]`
+- the model someone asked for and who was stopped to make room.
+
 Read `host_available_mib` from the engine's own `load_started` / `load_completed`
-lines (`podman logs ls-<id>`) and use the delta. RSS lies: flash-next reports
-6.4 GiB of RSS while holding 111.8 GiB, `Mlocked` stays 0, and the rest is kfd
-device memory no container stat shows. Every `capacities: {mem:}` is a claim
+lines (`podman logs ls-<id>`) and use the delta, but only from a load that
+loaded alone: a load that evicted something reports the evicted container's
+memory coming back while its own goes out, so the delta is wrong in whichever
+direction the churn went. RSS lies: flash-next reports 6.4 GiB of RSS while
+holding 111.8 GiB, `Mlocked` stays 0, and the rest is kfd device memory no
+container stat shows. Every `capacities: {mem:}` is a claim
 about physical RAM; a guessed one is how two models get loaded that do not fit.
 `TODO.md` lists the entries still resting on a guess.
 
@@ -109,8 +117,8 @@ which one a number came from.
 
 ## Engines and their flag sets
 
-Four run macro families (`run`, `gufo_run` / `gufo_ds41_run`, `hipfire_run`,
-`loom_pod` + `loom_serve_llm`) with ports and mount sets that differ enough that
+Three run macro families (`run`, `gufo_run` / `gufo_ds41_run`, `hipfire_run`)
+with ports and mount sets that differ enough that
 a new entry must copy its engine's macros rather than the nearest neighbour's.
 llama-swap expands macros in file order, so the `gufo_*` fragments stay above the
 run macros that use them. `${env.VAR}` is its own syntax for its process
@@ -132,25 +140,22 @@ Traps around gufo:
   `ext list` says so in its own words ("no reviewed release supports linux and
   extension API x.y.z") rather than as `needs update`. Read the whole list after
   an upgrade, not just the rows belonging to installed modules.
-- Loom (Inkling) is still not in the reviewed registry, so it is a git pin, not
-  `ext install loom` - that half of why it runs a Nix-built gufo in the
-  `gufo-nix` volume stands. The other half used to be the extension API: this
-  image speaks more than the `>= 0.3.35` the extension asks, and it carries
-  `libloom_text_embed.so` plus a `loom-runtime` store path with the header and
-  cmake package `CMAKE_PREFIX_PATH` wants, so a v0.3.7 module does build there
-  and `model list` then offers `inkling-2-mini-loom`. It does not serve it: the
-  load dies at `load_started` with `fatal_signal signal=11`, about 230 ms after
-  the container starts, with the pool free and with `seccomp=unconfined` on too
-  - so neither the sandbox nor a missing symbol is what the Nix binary supplies,
-  and the module is not a way in. Its built-in loom is one release behind the
-  one that added Inkling-2-Mini, which is why the image answers
-  `no loaded extension offers it` without the module. `${loom_serve_llm}` names
-  `/loom/gufo` because bare `gufo` is on the toolbox image's PATH only, and
-  `loom/README.md` rebuilds it in ~3 minutes and re-points the symlinks (local
-  artifacts, not tracked). Only `loom-inkling` runs that way:
-  `Inkling-2-Mini` itself is served by the `inkling2` module, which is in the
-  registry and needs no Nix. `TODO.md` §6 has the segfault and the one variable
-  it leaves (`--replace-builtin`).
+- Loom is not an engine on this box. A loom *package* is a directory whose
+  `llm_config.json` names an arch and a GGUF (`inkling-2-mini-loom`: arch
+  `inkling2`, `Inkling-2-Mini-UD-Q4_K_XL.gguf`, vocab 200058), and gufo 0.36.0
+  resolves `--model <package id>` to that GGUF and serves it on its own arch
+  support. So `gufo model list` saying `installed, no loaded extension offers
+  it` about a package id, while `serve llm --model <that id>` answers 200, is
+  two different questions - the first is which extension advertises the id, the
+  second is what the loader can read. Only `GUFO_MODELS_DIR` is needed to point
+  at the store; `${gufo_pod}` mounts it without naming it.
+  The `loom` module itself was tried and is gone: it builds against the image's
+  `libloom_text_embed.so` and seats over the built-in, then dies at
+  `load_started` with `fatal_signal signal=11` some 230 ms into the container,
+  pool free and `seccomp=unconfined` both on and off. It is not in the reviewed
+  registry (so `ext update` would rebuild it but never move it), it is removed
+  from the live store, and `TODO.md` §6 keeps the numbers in case it is ever
+  revisited. Nothing installed here needs Loom's kernels.
 
 hipfire runs upstream's own image: `ghcr.io/warpfront/hipfire`, `full` variant
 (ROCm 10.1.0-3, kernel packs for gfx1100/gfx1151/gfx1201 baked in), release tag
