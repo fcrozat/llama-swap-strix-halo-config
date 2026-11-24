@@ -421,16 +421,32 @@ local account name out of every blob and every commit message: config paths read
 `${env.HOME}`, which llama-swap substitutes for real, and the comments address
 the reader as `$USER`.
 
-What a clone gets is 16 files and 111 KiB (the `config.yaml` symlink counted as
-a link, not twice as its target): no binaries, no weights, no upstream
-docs, and no local account name anywhere in the object store. Two safety bundles
-sit in the home directory, both taken before the scrub, so both still carry the
+What a clone gets is 16 files and 171 KiB - re-measured on the evening of
+2026-11-24, after the day's rewrites and a new sweep script (the `config.yaml`
+symlink counted as a link, not twice as its target): no binaries, no weights, no
+upstream docs, and no local account name anywhere in the object store. Two
+safety bundles sit in the home directory, both taken before the scrub, so both still carry the
 name - `launchers-pre-rewrite.bundle` additionally carries the upstream docs.
 Both are still on disk as of 2026-11-24. The readback they were kept for has
 happened - `origin/main` was fetched and every object in it inspected, 237 of
 them, with no account name, hostname, credential or private address in any path
 or blob - so their condition is met and deleting them is the owner's call, not a
 step left to discover.
+
+Untracked on 2026-11-24, for the same kind of reason rather than an urgent one:
+`.pi/subagentura-state.json` was in the tree. 230 bytes of agent-harness
+bookkeeping - a parent session UUID and a telemetry correlation id - it arrived
+with a `git add -A` that only wanted the config and was refreshed by a later
+one. Nothing personal is in it, and nothing personal is in the two commits that
+held it, so there is no leak to unwind in a hurry. What is wrong is the
+category: box-local tool state in a public routing config, and the live risk is
+the next `git add -A` after a harness release decides to write a cwd or a
+prompt in there. `.pi/` is gitignored and the file is untracked, which closes
+that going forward. Getting it out of the *published* history is a force-push
+on a public `main`, so every later hash changes and anyone who cloned diverges
+- the owner's call, not an agent's, and `PUBLISHING.md` is the runbook for it
+including the re-audit that has to follow. Until that call, the honest
+description of the tip is: no personal data, one file that does not belong.
 
 ## 4. What the first inkling2 load left open
 

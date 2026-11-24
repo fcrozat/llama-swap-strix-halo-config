@@ -14,3 +14,9 @@
 *.log
 *.pid
 *.sock
+
+# Agent-harness state. The tool working in this tree writes .pi/ next to its cwd,
+# and a `git add -A` that only wanted the config takes it. Box-local session
+# bookkeeping, not part of a routing config - and the next harness release can
+# put anything at all in there.
+.pi/
