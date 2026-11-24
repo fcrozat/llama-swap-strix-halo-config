@@ -322,7 +322,9 @@ models:
   # two paths below. That is the survival route when a `podman pull` leaves the
   # module stale and skipped - edit the --model line rather than rebuild a
   # binary. It was a second entry until 2026-11-24, when one set of weights was
-  # costing the pool 70000 as two entries and 47000 as one; TODO.md §6.
+  # costing the pool 70000 as two entries and 47000 as one. That 47000 was
+  # that day's figure; the entry claims 57000 now, for the reason several
+  # lines below. TODO.md §6.
   gufo-inkling:
     name: Inkling-2-Mini Q4_K_XL (gufo, inkling2 kernels)
     # upstream accepts exactly the id the module lists in /v1/models -
