@@ -272,10 +272,26 @@ models:
     # a cold prefill. 32 GiB keeps 4x the checkpoints on disk. It is a soft cap
     # that grows only as needed and costs no RAM at all - a raise at startup
     # evicts nothing - so this is the one cache lever that is free to spend.
+    # Sampling: three flags went because the engine already applies exactly them
+    # to this model, not because they looked generic. gufo ignores the GGUF's
+    # own general.sampling.* keys; the defaults come from
+    # FlashNextSamplingDefaults() -> PresetDefaults(kQwen38), and the file's
+    # general.architecture is qwen4exp, which is what selects that preset. It
+    # sets top_k 20 in all three thinking modes, and leaves min_p and
+    # repeat_penalty unset so they rest at the SamplingConfig defaults of 0.0
+    # and 1.0 - so --top-k 20, --min-p 0.0 and --repeat-penalty 1.0 restated
+    # values the server would have used anyway.
+    # What stays, stays on purpose: --temperature 1.0 and --top-p 0.95 match the
+    # preset only while thinking is on, and this preset's thinking-disabled row
+    # is 0.7 / 0.8 with presence_penalty 1.5, so those three pins are what keep
+    # a thinking-off request from sampling on different numbers. --speculative
+    # mtp is not redundant either: serve infers a backend only from
+    # --dspark-model, so dropping it would take the drafter away from the
+    # fastest model on this box rather than simplify anything.
     # yamllint disable rule:line-length
     cmd: |
       ${gufo_run}
-      --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 --presence-penalty 0.0 --repeat-penalty 1.0 --model /models/Qwen3.8-Flash-Next-GGUF-Gufo/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf --speculative mtp --mtp-model /models/Qwen3.8-Flash-Next-GGUF-Gufo/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf --mmproj /models/Qwen3.8-Flash-Next-GGUF-Gufo/mmproj-BF16.gguf --cache-disk-bytes 34359738368
+      --temperature 1.0 --top-p 0.95 --presence-penalty 0.0 --model /models/Qwen3.8-Flash-Next-GGUF-Gufo/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf --speculative mtp --mtp-model /models/Qwen3.8-Flash-Next-GGUF-Gufo/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf --mmproj /models/Qwen3.8-Flash-Next-GGUF-Gufo/mmproj-BF16.gguf --cache-disk-bytes 34359738368
     # yamllint enable rule:line-length
     cmdStop: podman stop ls-gufo-flash-next
     checkEndpoint: /ready
