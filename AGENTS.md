@@ -161,7 +161,14 @@ Traps around gufo:
   pool free and `seccomp=unconfined` both on and off. It is not in the reviewed
   registry (so `ext update` would rebuild it but never move it), it is removed
   from the live store, and `TODO.md` §6 keeps the numbers in case it is ever
-  revisited. Nothing installed here needs Loom's kernels.
+  revisited. Nothing installed here needs Loom's kernels. What survives is the
+  recipe: `--env GUFO_MODELS_DIR=/models` (which `${gufo_pod}` mounts but does
+  not set) plus `--model inkling-2-mini-loom` runs the same weights through the
+  core loader with no module, the fix for the stale-module trap above.
+  `gufo-inkling` itself keeps the two paths, because the module route is the one
+  that carries `--mmproj` and so vision. A second entry ran the module-free form
+  until 2026-11-24, when one set of weights costing 70000 as two entries was
+  folded into it; a month of journal held no request for the removed alias.
 
 hipfire runs upstream's own image: `ghcr.io/warpfront/hipfire`, `full` variant
 (ROCm 10.1.0-3, kernel packs for gfx1100/gfx1151/gfx1201 baked in), release tag

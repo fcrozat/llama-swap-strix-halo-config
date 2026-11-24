@@ -66,12 +66,10 @@ macros:
   gufo_ds41_run: >-
     ${gufo_pod} ${gufo_image} ${gufo_serve_llm} --sessions 2
     --max-pending-per-client 4 ${gufo_serve_tail}
-  # Loom (a package's own kernels through libloom_text_embed) needs no separate
-  # binary: the toolbox image's built-in loom serves loom packages, so the only
-  # thing a loom entry adds over ${gufo_run} is GUFO_MODELS_DIR, because its
-  # --model is a package id resolved against that directory rather than a path.
-  # The Nix-built gufo this used to point at (gufo-nix volume, loom/ symlinks)
-  # is gone - see AGENTS.md and TODO.md §6.
+  # No loom macro: there is no loom entry. A loom package needs no separate
+  # binary, only GUFO_MODELS_DIR plus a package id for --model, which is written
+  # up where it is useful - the gufo-inkling comment below. The Nix-built gufo
+  # this block used to serve (gufo-nix volume, loom/ symlinks) is gone; TODO §6.
   ds41_dir: /models/DeepSeek-V4.1-Flash-1017
   ds41_q: DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M
   ds41_draft: DeepSeek-V4.1-Flash-1017-DSpark-draft-Q2K-Q4K.gguf
@@ -271,6 +269,14 @@ models:
   # presence/repetition/frequency penalties, so none are added and gufo leaves
   # them off. It is silent on reasoning effort, which leaves the tail's xhigh
   # (= 0.99) against the extension's own 0.9 default - TODO.md.
+  # This is the only Inkling entry. The package's GGUF also loads without the
+  # module: gufo 0.36 reads a package directory's llm_config.json (arch
+  # "inkling2", the GGUF name, vocab 200058) and serves it on core support, with
+  # --env GUFO_MODELS_DIR=/models and --model inkling-2-mini-loom instead of the
+  # two paths below. That is the survival route when a `podman pull` leaves the
+  # module stale and skipped - edit the --model line rather than rebuild a
+  # binary. It was a second entry until 2026-11-24, when one set of weights was
+  # costing the pool 70000 as two entries and 47000 as one; TODO.md §6.
   gufo-inkling:
     name: Inkling-2-Mini Q4_K_XL (gufo, inkling2 kernels)
     # upstream accepts exactly the id the module lists in /v1/models -
@@ -291,55 +297,6 @@ models:
     capacities: {mem: 47000}
     # 12 s to bring back against flash-next's 61 s, so it is the one that leaves
     evict_cost: 30
-    concurrencyLimit: 4
-
-  # `gufo model install inkling-2-mini-loom` put the package and both GGUFs in
-  # ${dir}/inkling-2-mini-loom; the served name is Inkling-2-Mini, not that id.
-  # The inkling2 module above took the client name, so this is the fallback:
-  # clients reach it as Inkling-2-Mini-Loom. evict_cost 10 because it is the
-  # biggest claim in the pool after ds41 and flash-next, and nothing should keep
-  # a fallback resident ahead of the model someone is actually using. Its value
-  # changed shape rather than disappearing: it is now the module-free way to the
-  # same weights, so it still answers on the one condition that breaks
-  # gufo-inkling - a `podman pull` whose module went stale and got skipped.
-  # It is not a second engine and the alias says otherwise; TODO.md §7.
-  # Not Loom since 2026-11-24, and not because of anything this entry asks
-  # for. gufo 0.36.0 (4a7d8c6) resolves --model against the package directory
-  # and follows its llm_config.json - arch "inkling2",
-  # gguf "Inkling-2-Mini-UD-Q4_K_XL.gguf", vocab 200058 - so the core loader
-  # serves the same GGUF that gufo-inkling reaches through the inkling2 module.
-  # The load line agrees (kind=text artifact=/models/inkling-2-mini-loom,
-  # vocabulary_tokens=200058) and `gufo model list` still calls the package id
-  # `installed, no loaded extension offers it` with only the built-in
-  # `loom 0.3.6 (src/models/loom)` present. No Nix binary, no /loom mount, no
-  # --security-opt seccomp=unconfined. TODO.md §6 has what it replaced.
-  # Measured through llama-swap on two cold loads, pool free both times,
-  # 131072 context and ${gufo_sessions} 4 sessions: host available
-  # 124109 -> 71242 = 52867 MiB and 124146 -> 71235 = 52911 MiB, 10.7 s and
-  # 8.3 s to load_completed, 45.7 tok/s decode, speculative=off. The Nix binary
-  # measured 71509 MiB on the same flags because Loom sized its own
-  # 1048576-token pool, and 70000 was set from that - so this claim is some
-  # 17 GiB more than the path needs now. It stays until --cache-ram-bytes
-  # bounds the other half of the question: with no cap the RAM cache runs to
-  # auto (half of free RAM, at most 32 GiB) and grows with use, which is the
-  # same reasoning behind gufo-inkling's 47000. TODO.md §1.
-  # GUFO_MODELS_DIR is what resolves --model inkling-2-mini-loom; ${gufo_pod}
-  # mounts the store but does not name it, unlike the entries above that pass a
-  # --model path.
-  loom-inkling:
-    name: Inkling-2-Mini Q4_K_XL (gufo + Loom, fallback)
-    useModelName: Inkling-2-Mini
-    aliases:
-      - Inkling-2-Mini-Loom
-    cmd: |
-      ${gufo_pod} --env GUFO_MODELS_DIR=/models ${gufo_image} ${gufo_serve_llm}
-      ${gufo_sessions} --context 131072 --max-tokens 4096
-      --model inkling-2-mini-loom
-    cmdStop: podman stop ls-loom-inkling
-    checkEndpoint: /ready
-    proxy: http://localhost:${PORT}
-    capacities: {mem: 70000}
-    evict_cost: 10
     concurrencyLimit: 4
 
   # The four hipfire claims are full-context worst cases composed from the
@@ -403,8 +360,8 @@ models:
     # resident, 33 with only this, ~88 GiB before any context is committed - and
     # the 116.7 GiB file keeps 26.8 GiB of PLE table mapped host-side, out of
     # reclaim. 95000 covers the composed worst case with headroom. The 32000
-    # before it was the hazard: 32000 + loom-inkling's 70000 = 102000 fit the
-    # pool on paper while 165000 of it was physical.
+    # before it was the hazard: on paper it fitted alongside a second large
+    # model inside the pool while the pair needed 165000 of physical RAM.
     capacities: {mem: 95000, npu: 1}
     evict_cost: 30
 

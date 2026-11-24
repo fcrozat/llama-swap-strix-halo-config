@@ -5,17 +5,21 @@ to apply a config change without taking the agent's own model down, how to
 measure what a model really costs, and what belongs to the distro package rather
 than to this tree.
 
-Measured 2026-11-22 through 2026-11-24. Of the eighteen entries, four carry a
+Measured 2026-11-22 through 2026-11-24. Of the seventeen entries, three carry a
 number from the host delta: gufo-flash-next 112000 (111.8 GiB), gufo-inkling
-47000 (40864 MiB, projector included), gufo-ds41 114000 against 122002 measured
-(the first entry found claiming less than it costs - §2), and loom-inkling
-70000 against 52867 on the path it runs now (§1). Four - the `hipfire-*` set -
-are composed from the engine's own load lines, which is a different method and
-says so in the entry (section 5). The other ten are still claims, and
-flash-next was 3.3x under-declared until someone measured it, so assume the ten
-are too.
+47000 (40864 MiB, projector included) and gufo-ds41 122000, measured 122002 -
+the first entry found claiming less than it costs, and it now declares the
+measurement (§2). Four more - the `hipfire-*` set - are composed from the
+engine's own load lines, which is a different method and says so in the entry
+(section 5). The other ten are still claims, and flash-next was 3.3x
+under-declared until someone measured it, so assume the ten are too.
 
-## 1. Measure the eleven entries that are still guesses
+A fourth measurement deleted an entry rather than changing a number:
+`loom-inkling` measured 52867 on a path that turned out to serve the same GGUF
+`gufo-inkling` already serves, and 70000 for a second copy of a 47000 model went
+back into the pool (§6, §7).
+
+## 1. Measure the ten entries that are still guesses
 
 qwen3.6-27b-q8 45000, qwen3.8-27b-q8 45000, laya 40000, ornith-35b-a3b 34000,
 qwen3.8-35b-a3b 34000, gufo-27b 30000, qwen3.8-27b 30000, gufo-deepseek 26000,
@@ -314,11 +318,13 @@ were circling.
 
 What went: `loom_pod`, `loom_image`, `loom_dir`, `loom_serve_llm` from the
 macros, and `nix-loom-build.sh`, `nix-loom-gufo.sh`, `loom/README.md` plus the
-`loom/` symlinks with them. Engines are three families now (AGENTS.md).
-What stays is the 5.9 GiB `gufo-nix` volume, referenced by nothing: it is the
-only thing that can bring that binary back, and `podman volume rm gufo-nix` is
-the reclaim once this path has survived a few pulls. `--replace-builtin` is
-still untested and moot while the core loader answers.
+`loom/` symlinks with them. Engines are three families now (AGENTS.md). The
+5.9 GiB `gufo-nix` volume went too, on 2026-11-24: it was kept as the one thing
+that could bring the Nix binary back, and once the image's own loader proved it
+could serve the same weights for 52867 MiB against that binary's 71509,
+rollback meant going back to a worse version of a path that already works. The
+scripts are in this repo's history if a future module needs the build again.
+`--replace-builtin` is still untested and moot while the core loader answers.
 
 The record of the module attempt, kept because the health-check trap in it is
 not about Loom at all:
@@ -406,31 +412,41 @@ Three attempts, identical each time: about 230 ms from `container start` to
   which is why §1 wants it lowered for the path running today. 11.2 s to
   `load_completed`, then 45.2 tok/s decode, ttft 208.7 ms, draft acceptance
   74.6%.
-- What adopted instead, with no module involved: `loom-inkling` runs
+- What adopted instead, with no module involved: an entry running
   `${gufo_pod} --env GUFO_MODELS_DIR=/models ${gufo_image} ${gufo_serve_llm}
   ${gufo_sessions} --context 131072 --max-tokens 4096 --model
   inkling-2-mini-loom` - the ordinary `${gufo_serve_llm}`, the same one the
-  other gufo entries use. What it does not do today is image input:
-  `gufo-inkling` passes `--mmproj` and this entry passes no projector, and
-  nobody has tried whether the core loader would take one. So the two entries
-  are not interchangeable yet - §7 is what this one is for now.
+  other gufo entries use. That entry existed for one day and §7 is why it does
+  not any more.
 
-## 7. What `loom-inkling` is for now
+## 7. `loom-inkling` is gone: one Inkling, and the recipe instead
 
-Its name and its alias (`Inkling-2-Mini-Loom`) both promise Loom; what runs is
-gufo's own inkling2 loader over the GGUF `gufo-inkling` also serves. Three ways
-out, none of them urgent, all of them the same announced restart:
+Its name and its alias (`Inkling-2-Mini-Loom`) both promised Loom; what ran was
+gufo's own inkling2 support over the GGUF `gufo-inkling` already serves. Same
+weights loaded twice under two claims, 70000 for the second copy of a 47000
+model - 18 GiB of the box spent on a name, in the same pool that §1 and §2 are
+arguing over. Folded into `gufo-inkling` on 2026-11-24; 17 entries validate.
 
-- Keep it as the module-free fallback and rename it. Its real job changed shape
-  rather than disappearing: it answers on the one condition that breaks
-  `gufo-inkling`, a `podman pull` whose `inkling2` module went stale and got
-  skipped (AGENTS.md, gufo traps). The alias is the part that lies.
-- Fold it into `gufo-inkling`. Same weights, same arch; what distinguishes it
-  today is an explicit `--context 131072`, no projector and no
-  `--cache-ram-bytes` cap.
-- Keep two context shapes on purpose, this one text-only and long, the module
-  one image-capable.
+What the fold keeps is the part that was actually new knowledge, written into
+`gufo-inkling`'s comment rather than left as an engine: the module-free route to
+these weights is `--env GUFO_MODELS_DIR=/models` plus `--model
+inkling-2-mini-loom` in place of the two `--model`/`--mmproj` paths, which is
+the fix for the documented trap where a `podman pull` leaves the `inkling2`
+module stale, skipped, and `/ready` still answering 200. One line edit, not a
+second binary.
 
-Decide with §1's numbers in hand. 70000 declared for a second copy of a 47000
-model is 18 GiB of the box spent on a name, and the pool is what everything
-else is measured against.
+Nothing had to be migrated. A month of the unit's journal (from 2026-10-25)
+holds no request for `Inkling-2-Mini-Loom` - the fourteen grep hits that looked
+like traffic were `/models/inkling-2-mini-loom` paths in the container's own
+load lines, matched case-insensitively - and `Inkling-2-Mini`, the alias
+`gufo-inkling` serves, is untouched.
+
+What the fold gives up is the pair of shapes that §6 left open: this entry was
+text-only at an explicit 131072 with no projector and no RAM-cache cap, while
+`gufo-inkling` is image-capable with `--cache-ram-bytes 8589934592` pinned.
+Nobody has tried whether the core loader takes a projector at all, so "text-only
+without the module" is still the unproven half rather than a lost capability. If
+a second context shape is genuinely wanted, it should be a second entry over
+`gufo_run` with its own honest `mem:` - which is a different thing from a second
+engine, and different from this: an entry whose name described a loader it no
+longer used.

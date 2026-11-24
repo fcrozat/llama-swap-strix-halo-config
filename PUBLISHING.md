@@ -106,8 +106,9 @@ a follow-up commit for exactly this:
 Rerun the whole audit against the rewritten repo **and a fresh clone of it** -
 the clone is what a stranger gets, and it is the only check that the rewrite
 reached every ref. Then `/run/host/usr/bin/llama-swap -config config.yaml
--validate` (the package binary) for
-`config is valid: 18 model(s)` and `curl -s localhost:8080/health` for `OK`.
+-validate` (the package binary) for `config is valid: N model(s)` where N is the
+entry count - 17 today, and it moves with the config, so count the entries
+rather than trusting this line - and `curl -s localhost:8080/health` for `OK`.
 
 `git fsck --unreachable` counts leftovers rather than leaks: an intermediate from
 an amend stays loose until `git gc --prune=now`. Unreachable objects are never
