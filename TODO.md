@@ -32,10 +32,11 @@ is given - so what remains is decisions and footprint, not accounting.
 2. §4's three inkling questions (prefill at a real length, whether
    `enable_thinking: false` reaches the extension, whether `--reasoning-effort
    xhigh` is worth its latency). None needs exclusivity, all need a window.
-3. §5's two hipfire questions: whether `$HIPFIRE_HOME` wants a volume (measure
-   the rebuild's share of cold start first), and whether the 66.0 GiB
-   `qwen3.8:flash-next-mq4-xts-symtrunk` becomes the first flash-next that can
-   share a pool.
+3. §5's hipfire questions: `$HIPFIRE_HOME` is settled - no volume, measured on
+   the serve path. What is left of the second is a pull decision rather than a
+   measurement: `qwen3.8:flash-next-mq4-xts-symtrunk` is a registry tag with no
+   file on this box, and the 66.0 GiB its sharing arithmetic rests on is header
+   metadata, not an installed size.
 4. §1's standing judgement, now that speculation is closed by measurement rather
    than by absence: does `deepseek-v4-flash` (89000, no draft) earn its place
    beside `gufo-deepseek` (112000, DSpark drafting working)?
@@ -498,16 +499,43 @@ model under test between them, which is what the first attempt did.
 
 Also open on this engine:
 
-- `${env.HOME}/hipfire-kcache` is mounted but `$HIPFIRE_HOME` is not, and the
-  containers are `--rm`, so hipfire rebuilds its own state at every start - a
-  `fit` of flash-next wrote a 429 MiB PLE hot-store index under it. Upstream
-  mounts a `hipfire-config` volume for exactly that. Worth a bind only if the
-  rebuild shows up in the cold-start time; measure before adding a mount.
-- `qwen3.8:flash-next-mq4-xts-symtrunk`, 66.0 GiB per `fit`, is a rung 0.4.2 did
-  not offer. At 66000 it would be the first flash-next that could share a pool
-  with anything - 66000 plus gufo-inkling's 57000 is 123000, inside the 124000
-  of today with 1 GiB to spare - which is the question section 2 asks about the
-  gufo entry.
+- `$HIPFIRE_HOME` does not want a volume. Measured on the serve path at 15:17:
+  `hipfire-4b` cold through the swap - answer in hand 6.0 s after the request,
+  its 9000 admitted beside flash-next's resident 112000 with nothing evicted -
+  left three things in `/home/hipfire/.hipfire` besides `models`: two pid files
+  and a 112 KB `registry.cache.json`. The kernel work that start appears to do is
+  reading, not building: `pre-compiled kernels: /var/cache/hipfire/gfx1151`, then
+  one `indexed package verified` line per `.hsaco`, every path inside the image.
+  The only other writes were a few `~/.cache/comgr/llvmcache-*` blobs, outside
+  `$HIPFIRE_HOME` and small. A mount would persist pid files.
+  The index this bullet used to cite as "429 MiB" is real but belongs to `fit`,
+  and it is two orders of magnitude larger: evaluating a tag it treats as not
+  installed wrote `cache/fit-headers/<hash>/` - four files, 93.1 GiB of apparent
+  size over 320 MiB of real blocks. With that directory persisted the same probe
+  went 7.51 s then 2.88 s, so that ~4.6 s is what a home volume would buy, on a
+  diagnostic. Three reasons not to: serving never reads it; `hipfire_dir` is
+  mounted `:ro`, so hipfire could not put it beside the weights even if it wanted
+  to; and it lands owned by the container's root, so clearing it needs
+  `podman unshare rm -rf` rather than a TTL. The flag is the answer - `fit
+  --no-fetch` writes nothing (0.30 s, `registry.cache.json` only) and says `fit
+  needs the model header` instead of building a replica. Probe with the flag and
+  leave `$HIPFIRE_HOME` as `--rm` leaves it.
+- `qwen3.8:flash-next-mq4-xts-symtrunk` is not on this box, so the sharing
+  question cannot be measured, and the 66000 it rests on was never a measurement.
+  The store holds `qwen3.8-flash-next.mq4-xts` at 116.68 GiB, a `gptq3` file at
+  the same size and a 0.28 GiB trunk overlay; `-symtrunk` is a registry tag with
+  no file behind it here. 66.0 GiB is what its registry header says - the catch is
+  that `fit --no-fetch` quotes 66.0 GiB with no store mounted at all, so the
+  number describes catalog metadata rather than anything installed. The pair
+  arithmetic in the earlier pass of this bullet, 66000 plus gufo-inkling's 57000
+  inside a 124000 ceiling, was arithmetic on a catalogue entry.
+  What it would take instead: `hipfire pull` of roughly 66 GiB (327 G is free on
+  that filesystem, so disk is not the obstacle), then a load that evicts whatever
+  is resident, including the model an answering session runs on. And its own
+  header-based `fit` at the trained 262144 says `DOES NOT FIT ... 62475 MiB routed
+  experts + 5115 MiB non-expert weights`, so the context it would be capped to is
+  the first thing to settle, not the last. Deliberately left: a pull decision
+  before it is a measurement.
 
 ## 6. Inkling on Loom: closed, the package never needed Loom
 
