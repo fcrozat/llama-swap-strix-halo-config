@@ -266,9 +266,17 @@ models:
     useModelName: Qwen3.8 Flash Next
     aliases:
       - Qwen3.8 Flash Next
+    # The disk tier is already on and currently sits at its 8 GiB default cap -
+    # full on this box (7.3 GiB chunks + 0.72 GiB private + manifests, 17473
+    # files), so checkpoints evict under churn and a long prompt falls back to
+    # a cold prefill. 32 GiB keeps 4x the checkpoints on disk. It is a soft cap
+    # that grows only as needed and costs no RAM at all - a raise at startup
+    # evicts nothing - so this is the one cache lever that is free to spend.
+    # yamllint disable rule:line-length
     cmd: |
       ${gufo_run}
-      --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 --presence-penalty 0.0 --repeat-penalty 1.0 --model /models/Qwen3.8-Flash-Next-GGUF-Gufo/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf --speculative mtp --mtp-model /models/Qwen3.8-Flash-Next-GGUF-Gufo/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf --mmproj /models/Qwen3.8-Flash-Next-GGUF-Gufo/mmproj-BF16.gguf
+      --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 --presence-penalty 0.0 --repeat-penalty 1.0 --model /models/Qwen3.8-Flash-Next-GGUF-Gufo/UD-Q4_K_XL/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf --speculative mtp --mtp-model /models/Qwen3.8-Flash-Next-GGUF-Gufo/MTP/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf --mmproj /models/Qwen3.8-Flash-Next-GGUF-Gufo/mmproj-BF16.gguf --cache-disk-bytes 34359738368
+    # yamllint enable rule:line-length
     cmdStop: podman stop ls-gufo-flash-next
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
