@@ -19,24 +19,67 @@ A fourth measurement deleted an entry rather than changing a number:
 `gufo-inkling` already serves, and 70000 for a second copy of a 47000 model went
 back into the pool (§6, §7).
 
-## 1. Measure the ten entries that are still guesses
+## 1. The ten entries that were guesses, measured
 
-qwen3.6-27b-q8 45000, qwen3.8-27b-q8 45000, laya 40000, ornith-35b-a3b 34000,
-qwen3.8-35b-a3b 34000, gufo-27b 30000, qwen3.8-27b 30000, gufo-deepseek 26000,
-deepseek-v4-flash 26000, openjev-q4 26000.
+Measured on 2026-11-24, swap pinned to loopback for the whole window (AGENTS.md,
+*Measuring without other clients in the sample*). Sweep one 10:05-10:21, sweep
+two 10:35-10:37, the laya re-run 10:46. One llama.cpp request per entry, then a
+220-token decode, `host_available_mib` sampled from `/run/host/proc/meminfo`
+every 0.4 s.
 
-gufo-ds41 left this list on 2026-11-24, when its first load here measured
-122002 against the declared 114000. What is open about it is no longer a
-measurement, so it moved to §2.
+    entry                was    measured  how
+    qwen3.6-27b-q8      45000      70726  trough, settled 70662
+    qwen3.8-27b-q8      45000      67818  trough, settled 67803
+    qwen3.8-27b         30000      54883  repeat 54674, 0.4% apart
+    gufo-27b            30000      44288  trough; engine's own delta 42834
+    ornith-35b-a3b      34000      32229  trough, settled 32189
+    qwen3.8-35b-a3b     34000      31713  trough, settled 31691
+    openjev-q4          26000      28046  trough, settled 27989
+    laya                40000       1130  loaded, never driven
+    gufo-deepseek       26000     112863  settled host figure; engine 101145
+    deepseek-v4-flash   26000      87970  trough, run without its draft
 
-All ten sit under 48000, which is the interesting property.
+Seven were under-claimed, by 1.08x (openjev-q4) up to 4.3x (gufo-deepseek); two
+came in just under what they claimed (the two MoE entries, 0.93x and 0.95x); and
+laya was 35x over-claimed - its file is 429 MiB. The config now carries these
+figures, each with the method beside it.
 
-For each: the `load_started` -> `load_completed` delta (AGENTS.md, Memory),
-noted against the sessions and context it was loaded with, taken on a load that
-evicted nothing - otherwise the number is the swap, not the model. Take it with
-the swap pinned to loopback (AGENTS.md, *Measuring without other clients in the
-sample*): one request from a laptop lands in the same `--sessions 4` batch as
-the probe, and the number stops being the model's.
+What the numbers say is that `--ctx-size` is the bill, not the weights. The run
+macro asks for 131072 tokens and llama.cpp commits the KV at init - settled and
+trough agree on every row - so a dense 27B pays ~36 GiB of KV whatever it is
+asked to read: 17 GiB of weights measured 54883, 30 GiB measured 67818. The
+sparse-attention MoE pays ~10 GiB for the same context. laya gets clamped to
+`n_ctx_slot 8192` ("the slot context (131072) exceeds the context the model can
+serve") and so costs about a gigabyte. openjev-q4 holds 28046 without ever
+running a token, because it refuses the request (below). Reduction is the lever:
+`gufo_serve_tail` already carries `--context 131072` for the gufo side and
+lowering either one buys back a model's worth of pool per entry.
+
+Two rows came from a load that evicted something and are void - openjev-q4 at
+10:10 (delta 46, one eviction) and laya's baseline in between sweeps - because
+this box answers from one of its own models: any request made between two
+entries reloads flash-next and the baseline becomes the model being evicted.
+Sweep two retook both on a verified-empty pool.
+
+`deepseek-v4-flash` does not load at all. llama-server exits while opening the
+5.6 GiB draft: `failed to load model: unknown model architecture:
+'deepseek4-dspark'`, so every request to it is a 500 after a 36 s wait. The
+image is 33 h old and its digest matches the registry, so this is the current
+llama.cpp build not knowing the arch, not a stale container or a bad file - the
+main GGUF loads and serves fine, measured at 87970 with `--spec-type` and
+`--spec-draft-model` dropped and a 200 back from a real request. gufo has the
+same weights as a built-in (`deepseek_v4_flash`) and serves them as
+`gufo-deepseek`, which is the entry that works. Open: drop the two draft flags
+here and take the 88000, or delete the entry and let gufo have DeepSeek.
+
+`laya` and `openjev-q4` are decision models and nothing here can drive them:
+`/v1/chat/completions` answers 501 "This model is a decision model without text
+generation, use /v1/systemone", and `/v1/systemone` wants a `state` object plus
+a non-empty `questions` object. So laya's 1130 is a load that was never asked
+anything, and its claim is weights plus its own 8192-token context with
+headroom, not a driven figure. Worth one client that speaks that schema before
+trusting either number - and worth knowing that any plain OpenAI client pointed
+at these two entries gets a 501.
 
 The ceiling those ten are measured against was settled on 2026-11-24, and not in
 the direction the config comment asked for. It was 118000, a placeholder at
@@ -45,10 +88,14 @@ now 124000, because gufo-ds41 measured 122002 and a ceiling below a model means
 llama-swap declines to start it (§2). So the pool is 97.3% of physical RAM and
 there is no headroom left in the arithmetic - what protects the box is that the
 top two claims (122000, 112000) cannot fit much of anything beside them, the
-cheapest claim being 9000. That makes the ten guesses above load-bearing in a
-new way: a co-resident pair is only safe if both numbers are honest, and two of
-them sitting under one large model is exactly the condition that produced the
-spike this config was written to prevent.
+cheapest claim being 9000. That arithmetic was only as good as the ten guesses,
+and it was not good: under the old claims llama-swap would happily run
+qwen3.6-27b-q8 and qwen3.8-27b-q8 together for 90000 of pool while the pair
+actually wanted 138544 - 14 GiB more than the box has, and more than the
+124000 ceiling was ever meant to allow. With the measured figures the same pair
+claims 139000 and is refused, which is the whole point of the sweep. What is
+left to earn is headroom, not accuracy: cut the context these entries ask for
+and the pairs come back.
 
 ## 2. Decide whether flash-next exclusivity is acceptable
 

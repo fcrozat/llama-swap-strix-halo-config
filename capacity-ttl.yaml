@@ -136,7 +136,13 @@ models:
       --model /models/deepseek-v4-flash/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf --spec-type draft-dspark --spec-draft-model /models/deepseek-v4-flash/DeepSeek-V4-Flash-DSpark-support-0731.gguf --cache-reuse 256 --cont-batching
     cmdStop: podman stop ls-deepseek-v4-flash
     proxy: http://localhost:${PORT}
-    capacities: { mem: 26000 }
+    # Measured 10:37, host MemAvailable trough across a load with the pool
+    # empty: 87970 MiB for the 81 GiB of weights plus the 131072-token KV. That
+    # probe had to run without --spec-type/--spec-draft-model, because as
+    # written this entry does not load at all - llama-server exits on "unknown
+    # model architecture: 'deepseek4-dspark'" opening the 5.6 GiB draft, so the
+    # claim adds the draft back. gufo serves the same weights (gufo-deepseek).
+    capacities: {mem: 94000}
     evict_cost: 10
     concurrencyLimit: 4
 
@@ -149,7 +155,10 @@ models:
     cmdStop: podman stop ls-gufo-27b
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
-    capacities: { mem: 30000 }
+    # Measured 10:15. gufo's own host_available_mib delta is 42834 and it says
+    # gpu_device_used_mib=42036; the host trough was 44288, settled 44260. 17
+    # GiB is weights and dflash2, the rest is 4 sessions over 131072 tokens.
+    capacities: {mem: 45000}
     evict_cost: 40
     concurrencyLimit: 4
 
@@ -162,7 +171,13 @@ models:
     cmdStop: podman stop ls-gufo-deepseek
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
-    capacities: { mem: 26000 }
+    # Measured 10:12: host trough 112875, and 112863 still gone after settling.
+    # gufo counts 101145 of that (gpu_device_used_mib=100324 of 122880); the 11
+    # GiB gap is host-side memory the engine does not claim - expert staging
+    # and its component cache. The claim takes the host figure, because that is
+    # the RAM the box is short of. At 113000 it co-resides with hipfire-4b
+    # only.
+    capacities: {mem: 113000}
     evict_cost: 10
     concurrencyLimit: 4
 
@@ -188,20 +203,20 @@ models:
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
     # dense weights + drafter 4.6 GiB + an expert cache that defaults to "what
-    # the sessions leave". No --mmproj: image input costs 0.9 GiB.
-    # Measured 2026-11-24 on a free pool, first load of this model here: host
-    # available 124455 -> 2453 = 122002 MiB (2 sessions, 131072 context,
-    # --stream-experts, dspark draft, disk cache on), 133.9 s to load_completed,
-    # gpu_device_used_mib 120143 of 122880. What it declared, 114000, was 8002
-    # MiB under that and the pool was 118000 - the entry was permitted to start
-    # something the box cannot hold, the exact condition this file exists to
-    # prevent. Decided 2026-11-24: the ceiling went up to 124000 (see routing
-    # above) and the claim now states the measurement, so the model stays
-    # loadable and the pool admits the truth. Consequence to know before asking
-    # for it: 122000 of 124000 leaves less than the cheapest claim (9000), so
-    # ds41 loads alone or not at all and everything else is evicted for it -
-    # that 133.9 s reload is the price. Cutting --context is the lever if that
-    # stops being acceptable; TODO.md §2.
+    # the sessions leave". No --mmproj: image input costs 0.9 GiB. Measured
+    # 2026-11-24 on a free pool, first load of this model here: host available
+    # 124455 -> 2453 = 122002 MiB (2 sessions, 131072 context,
+    # --stream-experts, dspark draft, disk cache on), 133.9 s to
+    # load_completed, gpu_device_used_mib 120143 of 122880. What it declared,
+    # 114000, was 8002 MiB under that and the pool was 118000 - the entry was
+    # permitted to start something the box cannot hold, the exact condition
+    # this file exists to prevent. Decided 2026-11-24: the ceiling went up to
+    # 124000 (see routing above) and the claim now states the measurement, so
+    # the model stays loadable and the pool admits the truth. Consequence to
+    # know before asking for it: 122000 of 124000 leaves less than the cheapest
+    # claim (9000), so ds41 loads alone or not at all and everything else is
+    # evicted for it - that 133.9 s reload is the price. Cutting --context is
+    # the lever if that stops being acceptable; TODO.md §2.
     capacities: {mem: 122000}
     evict_cost: 60
     concurrencyLimit: 1
@@ -218,12 +233,12 @@ models:
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
     # Measured, not guessed: available headroom 122.0 GiB unloaded -> 10.2 GiB
-    # warm = 111.8 GiB (2.4 GiB belongs to the monitoring containers). RSS shows
-    # 6.4 GiB because the rest is kfd device memory and streaming buffers, and
-    # Mlocked stays 0; --cache-ram-bytes is already capped (32 GiB default), so
-    # this is not a cache that will shrink. At 112000 of the 124000 pool it can
-    # share with the cheapest claim (9000) and nothing else - close to what
-    # really happens today.
+    # warm = 111.8 GiB (2.4 GiB belongs to the monitoring containers). RSS
+    # shows 6.4 GiB because the rest is kfd device memory and streaming
+    # buffers, and Mlocked stays 0; --cache-ram-bytes is already capped (32 GiB
+    # default), so this is not a cache that will shrink. At 112000 of the
+    # 124000 pool it can share with the cheapest claim (9000) and nothing else
+    # - close to what really happens today.
     capacities: {mem: 112000}
     # no ttl key: inherits globalTTL 900 (ttl -1 = inherit, 0 = never unload)
     evict_cost: 50
@@ -372,7 +387,14 @@ models:
       --model /models/systemone/Laya-Q8_0.gguf --spec-type none
     cmdStop: podman stop ls-laya
     proxy: http://localhost:${PORT}
-    capacities: { mem: 40000 }
+    # Measured twice, 10:17 and 10:46: 1021 and 1130 MiB, on a load that never
+    # answered anything. The file is 429 MiB, llama.cpp clamps its slot to
+    # n_ctx_slot 8192 ("the slot context (131072) exceeds the context the model
+    # can serve"), and a decision model gets no prompt cache by default, so
+    # this cannot grow into the 40000 it used to claim. Headroom over weights
+    # plus 8192 tokens, not a measured driven figure: chat answers 501 and
+    # /v1/systemone wants a `state` plus a non-empty `questions` object.
+    capacities: {mem: 2500}
     evict_cost: 1
     concurrencyLimit: 4
 
@@ -383,7 +405,11 @@ models:
       --model /models/systemone/OpenJev-Q4_K_M.gguf --spec-type none
     cmdStop: podman stop ls-openjev-q4
     proxy: http://localhost:${PORT}
-    capacities: { mem: 26000 }
+    # Measured 10:35 on a clean pool (the 10:10 run had an eviction in it and
+    # is void): trough 28046, settled 27989, without running a token. 18 GiB is
+    # the file; this one keeps the macro's 131072 slot, so unlike laya it pays
+    # the KV up front for context it has not used.
+    capacities: {mem: 29000}
     evict_cost: 1
     concurrencyLimit: 4
 
@@ -394,7 +420,10 @@ models:
       --model /models/Ornith/Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf ${moe}
     cmdStop: podman stop ls-ornith-35b-a3b
     proxy: http://localhost:${PORT}
-    capacities: { mem: 34000 }
+    # Measured 10:16: trough 32229, settled 32189 after a 220-token decode. 22
+    # GiB file, so ~10 GiB of KV - the sparse-attention MoE is a quarter of
+    # what a dense 27B pays for the same 131072 tokens.
+    capacities: {mem: 33000}
     evict_cost: 30
     concurrencyLimit: 4
 
@@ -405,7 +434,11 @@ models:
       --model /models/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-UD-Q8_K_XL.gguf --spec-type draft-mtp --parallel 1 --ubatch-size 16384
     cmdStop: podman stop ls-qwen3.6-27b-q8
     proxy: http://localhost:${PORT}
-    capacities: { mem: 45000 }
+    # Measured 10:19: trough 70726, settled 70662. 34 GiB weights + internal
+    # MTP, so ~36 GiB is the 131072-token KV. The old 45000 let the router pair
+    # this with qwen3.8-27b-q8 for a model set that needed 139 GiB on a 124 GiB
+    # box.
+    capacities: {mem: 71000}
     evict_cost: 60
     concurrencyLimit: 1
 
@@ -416,7 +449,11 @@ models:
       --model /models/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q4_K_XL.gguf --spec-type draft-mtp --spec-draft-model /models/Qwen3.8-27B-GGUF/MTP/mtp-Qwen3.8-27B-Q4_0.gguf --parallel 1 --ubatch-size 16384
     cmdStop: podman stop ls-qwen3.8-27b
     proxy: http://localhost:${PORT}
-    capacities: { mem: 30000 }
+    # Measured twice, 10:14 and 10:36: 54883 and 54674 - 0.4% apart, the second
+    # with the 17 GiB of weights already in the page cache. That repeat is the
+    # control: the trough is the resident set, not cached file reads. 17 GiB
+    # weights + 1.3 GiB MTP draft, so ~36 GiB of KV over 131072 tokens.
+    capacities: {mem: 55000}
     evict_cost: 40
     concurrencyLimit: 1
 
@@ -427,7 +464,9 @@ models:
       --model /models/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q8_K_XL.gguf --spec-type draft-mtp --spec-draft-model /models/Qwen3.8-27B-GGUF/MTP/mtp-Qwen3.8-27B-Q4_0.gguf --parallel 1 --ubatch-size 16384
     cmdStop: podman stop ls-qwen3.8-27b-q8
     proxy: http://localhost:${PORT}
-    capacities: { mem: 45000 }
+    # Measured 10:21: trough 67818, settled 67803. 30 GiB weights + draft, ~36
+    # GiB KV - same 131072-token bill as its Q4 sibling.
+    capacities: {mem: 68000}
     evict_cost: 60
     concurrencyLimit: 1
 
@@ -438,7 +477,9 @@ models:
       --model /models/Qwen3.6-35B-A3B-GGUF/Qwen3.8-35B-A3B-Q4_K_M.gguf ${moe}
     cmdStop: podman stop ls-qwen3.8-35b-a3b
     proxy: http://localhost:${PORT}
-    capacities: { mem: 34000 }
+    # Measured 10:15: trough 31713, settled 31691. 21 GiB file, ~10 GiB KV; the
+    # only entry here that came in under its old claim, and then barely.
+    capacities: {mem: 32000}
     evict_cost: 30
     concurrencyLimit: 4
 

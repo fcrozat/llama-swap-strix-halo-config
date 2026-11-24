@@ -111,7 +111,21 @@ direction the churn went. RSS lies: flash-next reports 6.4 GiB of RSS while
 holding 111.8 GiB, `Mlocked` stays 0, and the rest is kfd device memory no
 container stat shows. Every `capacities: {mem:}` is a claim
 about physical RAM; a guessed one is how two models get loaded that do not fit.
-`TODO.md` lists the entries still resting on a guess.
+An engine's delta is what that engine counts, which is not always what the host
+is short: gufo-deepseek reports 101145 while the host gave up 112863, the gap
+being expert staging and its component cache. Take both and claim the larger.
+
+llama.cpp logs no `host_available_mib` at all, so for its entries the method is
+to sample `/run/host/proc/meminfo` every half second across the load and take
+the trough. Two things make that trustworthy. Empty the pool first and verify it
+empty: this box answers from one of its own models, so a request you did not
+plan for reloads 112 GiB between two entries and the baseline becomes the model
+being evicted - two rows of the first sweep were void that way. And take a
+repeat: qwen3.8-27b measured 54883, then 54674 with its 17 GiB of weights
+already in the page cache, 0.4% apart, which is what shows the trough is the
+resident set and not cached file reads. Settled and trough agreed on every row
+of that sweep, so llama.cpp commits KV at init and `--ctx-size` - 131072 in the
+run macro - sets the bill before a token is read. `TODO.md` §1 has the table.
 
 Read the label though: hipfire's `free_after_weights=` is memory still free, not
 a weight size. Its KV is `vmm` - the load says `0 MiB committed at load` and
