@@ -413,6 +413,10 @@ models:
     # reclaim. 95000 covers the composed worst case with headroom. The 32000
     # before it was the hazard: on paper it fitted alongside a second large
     # model inside the pool while the pair needed 165000 of physical RAM.
+    # Scope 2026-11-24: a route, not a resident-time candidate - when the pool
+    # plan says flash-next it means gufo-flash-next (TODO.md §2). The claim
+    # stays composed-and-high either way, because the router still has to
+    # refuse honestly when someone does ask for this quant.
     capacities: {mem: 95000, npu: 1}
     evict_cost: 30
 

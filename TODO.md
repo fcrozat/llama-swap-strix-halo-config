@@ -354,6 +354,14 @@ So the cost is carried with its size known: one ds41 request makes the next
 flash-next request pay 133.9 s. The footprint lever below remains the way out if
 that ever stops being acceptable.
 
+Scope, decided with it: **flash-next in this section means `gufo-flash-next`.**
+`hipfire-flash-next` is a different quant (`qwen3.8:flash-next-mq4-xts`) on a
+second engine, and it is a route rather than a resident-time candidate - its
+`npu: 1` and its composed 95000 are there so the router refuses honestly, not so
+anyone plans warm time around it. Everything above - who stays warm, who gets
+evicted, what a reload costs - is the gufo entry, and the §5 pair involving the
+hipfire one is not queued behind it.
+
 ### gufo-ds41 decided this section, 2026-11-24
 
 Its first load here, on a pool that was free, took host available
@@ -404,12 +412,13 @@ number leaning on a guess:
 - `hipfire-flash-next` (95000, composed worst case, `npu: 1`) with the cheapest
   non-hipfire claim - `openjev-q4`, re-measured to 24000 the same evening, so
   119000 rather than the 121000 first written here. That pair was exclusive by
-  arithmetic at 118000 (see §5's eviction record) and it is not any more.
+  arithmetic at 118000 (see §5's eviction record) and it is not any more. Under
+  the scope rule above this is a routing fact, not a pair to plan around:
+  nothing is warm because of it and nothing waits on measuring it.
 
-Neither is wrong yet; both are unproven, because the small half of each pair is
-one of §1's ten. That is the real cost of the raise and the reason the list
-moved up the queue: two guesses now get to be co-resident with measured worst
-cases, and the router will only refuse what its own numbers say does not fit.
+The first is unproven and the second is out of scope. Neither is wrong, and the
+router will only refuse what its own numbers say does not fit - which is the real
+cost of the raise, and why §1's list moved up the queue while this one did not.
 
 ## 3. Give the repo a remote
 
@@ -644,7 +653,8 @@ model under test between them, which is what the first attempt did.
   decision. It was exclusive by arithmetic too, not just `npu: 1`: the smallest
   claim that is not another hipfire entry was 26000 and 95000 + 26000 is 121000,
   over the 118000 of that day. The ceiling is 124000 now, so that pair is
-  admissible - §2 records what the raise let in.
+  admissible - §2 records what the raise let in, and its scope keeps it a
+  routing fact rather than a resident pair: flash-next there means gufo.
 - `kernels: no closed route plan` on every tag, for four different reasons: arch
   5 (4b) and arch 6 (35b-a3b) both `UnsupportedRoute`, 27b because of its DFlash
   draft, flash-next because of the trunk overlay. All four then ran `predicted
