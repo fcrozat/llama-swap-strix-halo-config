@@ -498,8 +498,16 @@ models:
     proxy: http://localhost:${PORT}
     # Measured twice, 10:14 and 10:36: 54883 and 54674 - 0.4% apart, the second
     # with the 17 GiB of weights already in the page cache. That repeat is the
-    # control: the trough is the resident set, not cached file reads. 17 GiB
-    # weights + 1.3 GiB MTP draft, so ~36 GiB of KV over 131072 tokens.
+    # control: the trough is the resident set, not cached file reads.
+    # What the claim is made of got worse rather than better on 2026-11-24: the
+    # same cmd with --ctx-size 32768 appended settled at 36479 MiB against an
+    # empty pool of 124752. Two points give ~201 B per token and a ~30 GiB
+    # constant, so the context term is nearer 26 GiB than the 36 GiB this
+    # comment used to assert, and the constant is ~12 GiB more than weights
+    # plus the MTP draft (16.45 + 1.28 on disk) - llama.cpp logs no KV size at
+    # this verbosity to say what the rest is. TODO.md §2 has the fit, the
+    # instrument caveat, and the fact that a quarter of the context buys back
+    # a third, not three quarters.
     capacities: {mem: 55000}
     evict_cost: 40
     concurrencyLimit: 1

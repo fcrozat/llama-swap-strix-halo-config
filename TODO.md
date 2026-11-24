@@ -189,6 +189,44 @@ Rough targets, measured the same way as the baseline: under 48000 lets it
 coexist with a 27b, under 30000 with two of them. Write the chosen tradeoff into
 the entry's comment so the next reader does not undo it.
 
+### The slope, measured on qwen3.8-27b at a quarter context
+
+15:03, same entry, same cmd, one flag appended: `--ctx-size 32768` after the one
+already in the `run` macro. llama.cpp honours the last occurrence and says so -
+`DEPRECATED: argument '--ctx-size' specified multiple times … only last value
+will be used` - which is both the proof the override took effect (`n_ctx_slot =
+32768` on the load line) and a warning that last-wins is a stopgap: a real change
+belongs in the macro, not in a duplicated flag this build has started to
+deprecate.
+
+With the pool empty and that model the only thing resident, `MemAvailable` settled
+at 88273 against 124752 empty: **36479 MiB**, where the same entry at 131072 took
+54883 and 54674 the same morning. Two points make a fit rather than a curve:
+**~201 B per token of context, and a constant of about 30 GiB**, of which weights
+and the MTP draft are 17.7 GiB (16.45 + 1.28 on disk). The remaining ~12 GiB is
+compute buffers plus whatever the unified KV pool reserves, and it is not named,
+because llama.cpp at this verbosity logs only `n_slots = 1, n_ctx_slot = 32768,
+kv_unified = 'true'` - no KV size, no buffer size. So this comment is a fit to two
+measurements, not an accounting.
+
+What that says about the lever: cutting 131072 to 32768 returns 18.4 GiB - a
+third, not three quarters - and 65536 predicts 9 GiB. Two thirds of the footprint
+does not move with context, so no context setting makes a dense 27B small. It
+does change the arithmetic this section is about: two of them drop from 110000 of
+pool to about 74000, which puts inkling's 57000 beside one of them (94000) and
+still not beside both (131000 against a 124000 ceiling).
+
+The instrument caveat, because the two figures are not the same kind: the 131072
+numbers are load troughs from this morning's sweep, the 32768 number is free
+memory settled 30 s after a 154-token generation. What makes them comparable is
+§1's own observation that settled and trough agree on every llama.cpp row; a
+`-lv 4` load that prints the KV cache size would replace the fit with a
+measurement and is the cheap next step.
+
+Nothing shipped changed. The entry still asks for 131072, because the clients on
+this box send 108k-token prompts (§1) and deciding what they are allowed to ask
+for is the operator's call rather than a measurement's.
+
 Open question for the same pass: which models do we actually want resident at
 the same time? gufo-ds41 (122000) is exclusive by construction now, and preload
 says flash-next should be the warm default - which means ds41 is the one that
@@ -334,22 +372,40 @@ Also open on that entry:
 - decode was 43.4 tok/s on one 48-token completion, and 43.5 on a 74-token one
   after the 0.1.3 bump, so the figure reproduces even though it is still not the
   head-to-head against the Loom engine it replaced as the `Inkling-2-Mini` name.
-  Prefill measured 172.7 tok/s at 22 prompt tokens, which is too short to mean
-  anything, and the shape that would mean something is on the record: §1 logged a
-  108114-token request to flash-next from the session that works on these models,
-  so a long-prompt prefill number is a real client shape rather than a
-  hypothetical. None of the three bullets below needs exclusivity - each needs a
-  window in which nobody else is loading, which is the scarce thing (§1).
-- `enable_thinking: false` still returned 41 `reasoning_tokens` (content was
-  right). The extension says reasoning-off is its own doing, not the template's,
-  so check whether gufo's flag reaches it before clients rely on it.
+  At 19k tokens of context it is 29 tok/s (34.5 ms/token), against 37-38 tok/s on
+  the short prompts measured the same afternoon - so long context costs about a
+  quarter of the decode as well as the prefill below.
+- prefill at a length that means something, 15:04 with the pool empty: **19243
+  prompt tokens in 18393 ms = 1046 tok/s**, against 74 tok/s for the same model at
+  22 prompt tokens and 237 tok/s at 60. The short figures were fixed cost, not
+  speed - roughly 250-300 ms of setup per request, which at 22 tokens is most of
+  the request. Extrapolated, the 108114-token shape §1 logged is about a 100 s
+  prefill on this entry: a client waiting on a long prompt here is waiting on
+  prefill, and the 43 tok/s headline only describes the tail of it.
+  Memory is the one thing that did not move: the host trough during that 19k
+  prefill was 41989 MiB against the 41208 of its own load, 781 MiB for 19k tokens
+  of state. Either `MemAvailable` is still not seeing what the context costs - the
+  §4 gap again - or gufo commits context up front and the prefill adds nothing.
+  Both readings keep 57000 the conservative claim.
+- `enable_thinking: false` works, and the field to read is
+  `usage.completion_tokens_details.reasoning_tokens`, not a top-level
+  `reasoning_tokens`: with the switch the same prompt came back with
+  `reasoning_tokens: 0`, no `reasoning_content`, and 91 completion tokens where
+  without it the same prompt spent 143. The "still returned 41 reasoning_tokens"
+  recorded here an hour earlier did not reproduce; one of the two is wrong, and
+  the field path above is where a future check should look before a client is told
+  this is off.
 - the entry inherits `--reasoning-effort xhigh` from `gufo_serve_tail`, which the
   extension maps to 0.99 against its own unset default of 0.9, and its M4 log
   says effort barely moves this model while `high`-to-`max` only lengthens the
   reasoning on some prompts - so Inkling may be paying latency for nothing.
-  Unsloth's guide names no effort level, so nothing changed without the
-  measurement: same prompt at xhigh and at high, compare reasoning length and
-  whether the answer ever differs.
+  Measured once each at 15:04 on one arithmetic prompt: absent 143 completion
+  tokens, `reasoning_effort: high` 226, `xhigh` 169 (160 of them reasoning), every
+  answer correct and no ordering to the counts. A per-request effort clearly
+  reaches the engine, since the numbers move, but one sample cannot separate
+  effort from sampling noise. Thinking-off (91 tokens, zero reasoning) is the only
+  lever demonstrated here; retuning effort is not worth a restart until there is a
+  fixed seed and a longer generation to compare.
 
 ## 5. What the hipfire image switch measured, and what it left open
 
