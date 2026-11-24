@@ -20,6 +20,31 @@ A fourth measurement deleted an entry rather than changing a number:
 `gufo-inkling` already serves, and 70000 for a second copy of a 47000 model went
 back into the pool (§6, §7).
 
+**What is left, in the order worth taking it.** Every number in the config is now
+measured or composed from an engine's own lines - with the two exceptions §1
+names, `laya` loaded but never driven and `openjev-q4` refusing every request it
+is given - so what remains is decisions and footprint, not accounting.
+
+1. §2's footprint lever: `--context 131072` is what the pool is being spent on
+   (46 GiB per session on ds41, ~36 GiB on a dense 27B), and lowering it is the
+   only thing that buys concurrency back. Needs a restart window, not exclusivity
+   - our own requests measure the delta.
+2. §4's three inkling questions (prefill at a real length, whether
+   `enable_thinking: false` reaches the extension, whether `--reasoning-effort
+   xhigh` is worth its latency). None needs exclusivity, all need a window.
+3. §5's two hipfire questions: whether `$HIPFIRE_HOME` wants a volume (measure
+   the rebuild's share of cold start first), and whether the 66.0 GiB
+   `qwen3.8:flash-next-mq4-xts-symtrunk` becomes the first flash-next that can
+   share a pool.
+4. §1's standing judgement, now that speculation is closed by measurement rather
+   than by absence: does `deepseek-v4-flash` (89000, no draft) earn its place
+   beside `gufo-deepseek` (112000, DSpark drafting working)?
+
+One thing is blocked rather than open: §4's device-versus-host question needs
+either root on the host or a window when nobody else wants a model, and neither
+is available while an agent session answers from this box (§1's last subsection
+says why a probe is the unsafe shape, not merely the inaccurate one).
+
 ## 1. The ten entries that were guesses, measured
 
 Measured on 2026-11-24, swap pinned to loopback for the whole window (AGENTS.md,
@@ -98,8 +123,8 @@ the arch string the draft file names is not - `libllama.so.1` in build 13600
 naming a mechanism and a file naming an arch the loader has never heard of is
 not a misuse of the flag. Nor does the main file draft for itself: it declares
 `deepseek4.nextn_predict_layers` and no `nextn.*` or `mtp.*` tensor, so
-`draft-mtp` has nothing to read. `ngram-cache` is the one draft-free mode left, and it is measured: slower, and
-out of the config again. Tested on the entry itself through the swap at 14:08 -
+`draft-mtp` has nothing to read. `ngram-cache` is the one draft-free mode left. It is measured now, and slower,
+and out of the config again. Tested on the entry itself through the swap at 14:08 -
 the only shape that is safe while another session is live, because the router
 serialises memory and an unmanaged probe does not - it loaded, served two 200s,
 and decoded worse than plain: 15.02 t/s on a novel 266-token completion against
@@ -256,8 +281,11 @@ a link, not twice as its target): no binaries, no weights, no upstream
 docs, and no local account name anywhere in the object store. Two safety bundles
 sit in the home directory, both taken before the scrub, so both still carry the
 name - `launchers-pre-rewrite.bundle` additionally carries the upstream docs.
-Both are still on disk as of 2026-11-24 and go once the published history has
-been read back from the remote and confirmed good.
+Both are still on disk as of 2026-11-24. The readback they were kept for has
+happened - `origin/main` was fetched and every object in it inspected, 237 of
+them, with no account name, hostname, credential or private address in any path
+or blob - so their condition is met and deleting them is the owner's call, not a
+step left to discover.
 
 ## 4. What the first inkling2 load left open
 
@@ -307,7 +335,11 @@ Also open on that entry:
   after the 0.1.3 bump, so the figure reproduces even though it is still not the
   head-to-head against the Loom engine it replaced as the `Inkling-2-Mini` name.
   Prefill measured 172.7 tok/s at 22 prompt tokens, which is too short to mean
-  anything: a 108k-token request is what these sessions actually send.
+  anything, and the shape that would mean something is on the record: §1 logged a
+  108114-token request to flash-next from the session that works on these models,
+  so a long-prompt prefill number is a real client shape rather than a
+  hypothetical. None of the three bullets below needs exclusivity - each needs a
+  window in which nobody else is loading, which is the scarce thing (§1).
 - `enable_thinking: false` still returned 41 `reasoning_tokens` (content was
   right). The extension says reasoning-off is its own doing, not the template's,
   so check whether gufo's flag reaches it before clients rely on it.
