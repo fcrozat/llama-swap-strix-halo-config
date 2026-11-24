@@ -395,8 +395,8 @@ cases, and the router will only refuse what its own numbers say does not fit.
 
 Done 2026-11-24: `origin` is
 `https://github.com/fcrozat/llama-swap-strix-halo-config` and `main` is pushed.
-What remains of this section is the tail of it - the two safety bundles below,
-and re-auditing before any force-push, since the first push closed that door.
+What remains of this section is the tail of it: the three safety bundles below,
+and the rule that a force-push here is one-way and needs the whole audit redone.
 The name was chosen as recorded here: `llama-swap-strix-halo-config`, engine
 first, then AMD's name for this silicon - plain "Strix" is a pentesting tool and
 a different APU family than the gfx1151 here.
@@ -428,25 +428,47 @@ upstream docs, and no local account name anywhere in the object store. Two
 safety bundles sit in the home directory, both taken before the scrub, so both still carry the
 name - `launchers-pre-rewrite.bundle` additionally carries the upstream docs.
 Both are still on disk as of 2026-11-24. The readback they were kept for has
-happened - `origin/main` was fetched and every object in it inspected, 237 of
-them, with no account name, hostname, credential or private address in any path
-or blob - so their condition is met and deleting them is the owner's call, not a
-step left to discover.
+happened - `origin/main` was fetched and every object in it inspected, with no
+account name, hostname, credential or private address in any path or blob - so
+their condition is met and deleting them is the owner's call, not a step left to
+discover. All three bundles are the last thing to delete: each is one file
+holding exactly what a rewrite removed, and the newest holds the harness state
+this rewrite took out.
 
-Untracked on 2026-11-24, for the same kind of reason rather than an urgent one:
-`.pi/subagentura-state.json` was in the tree. 230 bytes of agent-harness
-bookkeeping - a parent session UUID and a telemetry correlation id - it arrived
-with a `git add -A` that only wanted the config and was refreshed by a later
-one. Nothing personal is in it, and nothing personal is in the two commits that
-held it, so there is no leak to unwind in a hurry. What is wrong is the
-category: box-local tool state in a public routing config, and the live risk is
-the next `git add -A` after a harness release decides to write a cwd or a
-prompt in there. `.pi/` is gitignored and the file is untracked, which closes
-that going forward. Getting it out of the *published* history is a force-push
-on a public `main`, so every later hash changes and anyone who cloned diverges
-- the owner's call, not an agent's, and `PUBLISHING.md` is the runbook for it
-including the re-audit that has to follow. Until that call, the honest
-description of the tip is: no personal data, one file that does not belong.
+Purged on 2026-11-24, on the owner's word: `.pi/subagentura-state.json` had been
+in the tree. 230 bytes of agent-harness bookkeeping - a parent session UUID and
+a telemetry correlation id - it arrived with a `git add -A` that only wanted the
+config and was refreshed by a later one. Nothing personal was in it; what was
+wrong is the category, box-local tool state in a public routing config, and the
+live risk was the next `git add -A` after a harness release decides to write a
+cwd or a prompt in there. `.pi/` is gitignored and the file is untracked, so it
+cannot recur; the rewrite below removes the copies already committed.
+
+`git filter-repo --path .pi --invert-paths` over all 56 commits, with
+`--message-callback` rewriting the one commit message that quoted a hash this
+rewrite invalidates - quoted hashes die, so it now names that commit by its
+subject. `filter-repo` first refused to run: an `already_ran` marker from the
+two earlier passes prompted, and with no tty that is an `EOFError` and nothing
+happens; answering `n` starts an independent rewrite instead of continuing the
+old mapping, which is what a different change wants. Post-rewrite the store is
+56 commits, 254 objects, 138 blobs, 16 files, and `git fsck --unreachable` is 0
+- the old objects are gone, not merely unreferenced.
+
+Re-audited over that store, per needle and by shape: the account name is 0
+whole-word and 0 as a `/home/` path (the only case-insensitive substring hits
+are the word "cooperate" inside `PUBLISHING.md`'s own warning about exactly
+that), `BEGIN PRIVATE` and `api_key` are the same line naming its needles,
+`password` is that line plus the `sudo -n` comments, and the dotted names
+anywhere in history are registry URLs, filenames and one hipfire label
+(`dev.hipfire.variant`) - no hostname, no `user:pass@`, no key material. The two
+UUIDs from the purged file are in 0 blobs, which is the check that the payload
+left rather than just its path.
+
+Third bundle in the home directory, `launchers-pre-pi-purge.bundle` (154 KiB),
+taken before this rewrite. The push is a `--force-with-lease` naming the
+pre-purge tip, so it fails rather than clobbering if anything else moved `main`.
+After it every hash here is new, and anyone who cloned must re-clone or reset -
+the door this section said was closed, reopened deliberately once.
 
 ## 4. What the first inkling2 load left open
 
@@ -806,7 +828,7 @@ Its name and its alias (`Inkling-2-Mini-Loom`) both promised Loom; what ran was
 gufo's own inkling2 support over the GGUF `gufo-inkling` already serves. Same
 weights loaded twice under two claims, 70000 for the second copy of a 47000
 model - 18 GiB of the box spent on a name, in the same pool that §1 and §2 are
-arguing over. Folded into `gufo-inkling` on 2026-11-24; 17 entries validate.
+arguing over. Folded into `gufo-inkling` on 2026-11-24; 16 entries validate.
 
 What the fold keeps is the part that was actually new knowledge, written into
 `gufo-inkling`'s comment rather than left as an engine: the module-free route to
