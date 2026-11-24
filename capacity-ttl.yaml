@@ -73,6 +73,14 @@ macros:
   gufo_serve_llm: >-
     gufo serve --host 0.0.0.0 --port 8080 llm
   gufo_sessions: --sessions 4 --max-pending-per-client 4
+  # The gufo context stays at 131072 while the llama.cpp `run` macro went to
+  # 65536 on 2026-11-24, and that is a decision rather than an oversight. The
+  # evidence points the other way for this family: the one 108k-token prompt on
+  # the record (TODO.md §1) is gufo traffic, and 72 h of journal (TODO.md §2)
+  # logged 8302 requests to flash-next against no load of any `${run}` model. So
+  # the long window here has a buyer and the one that was cut had none. Cutting
+  # this is the lever for ds41's exclusivity - see its entry - but nobody has
+  # measured it, so no claim in this file depends on it either way.
   gufo_serve_tail: >-
     --max-tokens 32768 --context 131072 --cache-disk /gufo_cache
     --reasoning-effort xhigh --preserve-thinking on
@@ -135,7 +143,9 @@ routing:
           # exclusivity: the top two claims (122000, 112000) fit almost nothing
           # alongside them, the cheapest claim being 9000. The number to revisit
           # is ds41's footprint (--context 131072 at 2 sessions is where its
-          # 122002 comes from), not this one. TODO.md §2.
+          # 122002 comes from), not this one. That one was looked at on
+          # 2026-11-24 and left as it is - see the gufo_serve_tail comment.
+          # TODO.md §2.
           mem: 124000
           # only one hipfire container may claim /dev/accel/accel0 at a time
           npu: 1
@@ -219,7 +229,9 @@ models:
     # know before asking for it: 122000 of 124000 leaves less than the cheapest
     # claim (9000), so ds41 loads alone or not at all and everything else is
     # evicted for it - that 133.9 s reload is the price. Cutting --context is
-    # the lever if that stops being acceptable; TODO.md §2.
+    # the lever if that stops being acceptable; it was asked on 2026-11-24 and
+    # left alone, because this is the family with long-context traffic, so the
+    # exclusivity is accepted rather than worked around. TODO.md §2.
     capacities: {mem: 122000}
     evict_cost: 60
     concurrencyLimit: 1

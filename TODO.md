@@ -28,23 +28,27 @@ questions (no `$HIPFIRE_HOME` volume, no symtrunk pull), and §1's duplicate
 DeepSeek (`deepseek-v4-flash` is out of the file). So were the two follow-through
 items that survived them: the six `${run}` claims were re-swept at the 65536 the
 macro actually asks (§1, 17:41-17:51, 51000 of claim back out of the pool), and
-both decision models have answered through `/v1/systemone`. Two things remain,
-one lever and one preference:
+both decision models have answered through `/v1/systemone`. The gufo side of the
+same lever was then looked at and deliberately left alone, so one question is
+left:
 
-1. Cut `--context` on the gufo side. `gufo_serve_tail` still carries 131072, so
-   the llama.cpp cut never touched the two largest claims on the box - ds41's
-   122000 and inkling's 57000 - and §2 says ds41's forced exclusivity is what
-   ends if that number moves. This one needs a decision before a measurement:
-   what context do gufo clients use, given the 108k-token prompt on the record
-   is gufo traffic and the journal counts in §2 show no `${run}` load at all.
-2. §2's resident-set question, which the smaller contexts make sharper: ds41 is
+1. §2's resident-set question, which the smaller contexts make sharper: ds41 is
    exclusive by construction and preload warms flash-next - which set do we want
    warm?
 
-The window itself stopped being an improvisation today: pin, watchdog, guard that
-refuses a non-empty pool, and a trap that unpins even if the sweep is killed
-(§1's re-sweep note). That makes the next one a decision about cost rather than
-an hour of care.
+`--context` on the gufo side is no longer an open item and the reason is written
+where a reader will meet it - the `gufo_serve_tail` comment - rather than left as
+an unclaimed lever: this is the family with long-context traffic (the 108k prompt
+in §1 is gufo, and the journal in §2 found no `${run}` load at all), so the
+window that was cheap to cut over there has a buyer here. It costs ds41's
+exclusivity and that cost is accepted, not ignored. Reopen it with a measurement,
+not with the number.
+
+The window itself stopped being an improvisation today: `./run-mem-sweep.sh` now
+carries the whole method - pin, prove the pin, watchdog, refuse a non-empty pool,
+void a row on a foreign `capacity:` line, unpin on a trap even if the sweep is
+killed - and defaults to a dry run that loads nothing. That makes the next window
+a decision about cost rather than an hour of care.
 
 Nothing is blocked. §4's device-versus-host question was closed by decision
 rather than by a root read, and §4 says so plainly rather than leaving a note
@@ -87,9 +91,11 @@ openjev-q4 held 28046 without ever running a token, because it was never asked
 one (below). Reduction is the lever, and the llama.cpp half of it is pulled
 *and* re-measured: the macro went to 65536 and the six `${run}` rows were
 re-swept against an empty pool at 17:41-17:51, which takes 51000 of claim out of
-a 124000 pool. What is left is the gufo side, where `gufo_serve_tail` still
-carries `--context 131072` - which is why the two largest claims on the box,
-ds41's 122000 and inkling's 57000, are untouched by any of today's arithmetic.
+a 124000 pool. The gufo side, where `gufo_serve_tail` still carries `--context
+131072`, was weighed against that and left alone - which is why the two largest
+claims on the box, ds41's 122000 and inkling's 57000, are untouched by any of
+today's arithmetic, and why that is a decision rather than a leftover (the
+`gufo_serve_tail` comment carries the reason).
 
 Two rows came from a load that evicted something and are void - openjev-q4 at
 10:10 (delta 46, one eviction) and laya's baseline in between sweeps - because
@@ -363,7 +369,11 @@ are the load's own.
 The footprint lever stays available and is the better half if that exclusivity
 stops being acceptable: cut `--context` from 131072 and re-measure the delta,
 and the claim comes down with it. That is a second window, and it is the same
-restart as §1's list.
+restart as §1's list. Asked and declined on 2026-11-24: the traffic that wants
+131072 on this box is gufo traffic, so the exclusivity stands and the lever is
+recorded as deliberately unpulled in `capacity-ttl.yaml` rather than left for the
+next reader to discover. If it is ever pulled, `./run-mem-sweep.sh` is the window
+and the claims move with the measurement, not with the flag.
 
 ### What the raise admitted, and why §1 got more important
 
