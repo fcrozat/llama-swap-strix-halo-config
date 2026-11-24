@@ -115,10 +115,10 @@ A ceiling is a permission slip, so 118000 -> 124000 let in pairs that used to be
 refused before start. Two of them are worth naming, because each is a measured
 number leaning on a guess:
 
-- `gufo-flash-next` (112000, measured) with `hipfire-4b` (9000): 121000 admitted.
+- `gufo-flash-next` (112000, measured) with `hipfire-4b` (9000) at 121000.
 - `hipfire-flash-next` (95000, composed worst case, `npu: 1`) with the cheapest
-  non-hipfire claim, 26000: also 121000. It was exclusive by arithmetic at
-  118000 (see §5's eviction record) and it is not any more.
+  non-hipfire claim, 26000, also at 121000. That one was exclusive by arithmetic
+  at 118000 (see §5's eviction record) and it is not any more.
 
 Neither is wrong yet; both are unproven, because the small half of each pair is
 one of §1's ten. That is the real cost of the raise and the reason the list

@@ -98,9 +98,10 @@ the top two claims cannot coexist with much of anything.
 Why a model vanished is one grep, and it is also the check on the measurement
 below: `journalctl --user -u llama-swap | grep 'capacity: model='` prints
 `capacity: model=gufo-flash-next evict=[loom-inkling] pools=map[mem:118000 ...]`
-and names the model someone asked for and who was stopped to make room. The
-quoted pool value is whatever the config held that day; the `model=` / `evict=`
-pair is the answer.
+and names the model someone asked for and who was stopped to make room. Read it
+as an observation, not a schema: the pool value is what the config held that day
+and `loom-inkling` is an entry this file no longer has. The `model=` / `evict=`
+pair is the answer; the numbers beside it are not.
 
 Read `host_available_mib` from the engine's own `load_started` / `load_completed`
 lines (`podman logs ls-<id>`) and use the delta, but only from a load that
