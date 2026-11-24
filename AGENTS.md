@@ -170,7 +170,16 @@ last state, logs `poll failed ... Connection refused` every 10 s, and trips its
 fault. If an agent runs this while it is served by the box itself, a detached
 watchdog that probes `127.0.0.1:8080` and removes the drop-in on failure is
 cheap insurance: the same forwarding that lets it measure is the only thing
-keeping its own session alive.
+keeping its own session alive. Clear the lock by hand when the window closes,
+though: `pkill -f loopback-watchdog` matches the command line of the shell that
+runs it and kills that shell before its `rm`.
+
+Serving yourself is the harder half. Unload the engine the agent answers from
+and then issue no model request of its own until the sweep is over - otherwise
+the box reloads its own 112 GiB model between two entries and the baseline
+becomes that eviction, which voided two rows of the sweep that set these
+capacities. One detached batch, one blocking wait for it, and no tool call that
+talks to a model inside the window.
 
 ## Engines and their flag sets
 
