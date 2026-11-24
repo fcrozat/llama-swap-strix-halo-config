@@ -62,6 +62,17 @@ this box answers from one of its own models: any request made between two
 entries reloads flash-next and the baseline becomes the model being evicted.
 Sweep two retook both on a verified-empty pool.
 
+An empty pool is also not something this box can be handed. Ninety idle seconds
+on 2026-11-24 logged six `/v1/chat/completions` against flash-next, one of them
+a 108114-token prompt: another agent session works on these models. Every time a
+sweep stopped flash-next that traffic brought it back inside twenty seconds,
+which is three `capacity: model=gufo-flash-next evict=[gufo-inkling]` lines
+taken inside measurement windows and one 502 for a request that was in flight.
+It follows that a batch script which detaches and is waited on by a separate
+tool call cannot measure anything here - returning from the wait is itself a
+model request - so a sweep has to be one synchronous call, and a row is only
+good while the journal shows no foreign `capacity:` line.
+
 `deepseek-v4-flash` does not load at all. llama-server exits while opening the
 5.6 GiB draft: `failed to load model: unknown model architecture:
 'deepseek4-dspark'`, so every request to it is a 500 after a 36 s wait. The
@@ -70,8 +81,22 @@ llama.cpp build not knowing the arch, not a stale container or a bad file - the
 main GGUF loads and serves fine, measured at 87970 with `--spec-type` and
 `--spec-draft-model` dropped and a 200 back from a real request. gufo has the
 same weights as a built-in (`deepseek_v4_flash`) and serves them as
-`gufo-deepseek`, which is the entry that works. Open: drop the two draft flags
-here and take the 88000, or delete the entry and let gufo have DeepSeek.
+`gufo-deepseek`, which is the entry that works.
+
+Asked whether the draft could be fixed rather than dropped: no flag can, on this
+engine. `--spec-type` lists `draft-dspark`, so the mechanism is compiled in, but
+the arch string the draft file names is not - `libllama.so.1` in build 13600
+(403dfcb03, the newest the registry has) carries `deepseek4` 148 times, plus
+`deepseek2`, `dspark` and `dflash`, and `deepseek4-dspark` zero times. A flag
+naming a mechanism and a file naming an arch the loader has never heard of is
+not a misuse of the flag. Nor does the main file draft for itself: it declares
+`deepseek4.nextn_predict_layers` and no `nextn.*` or `mtp.*` tensor, so
+`draft-mtp` has nothing to read. `ngram-cache` is the one draft-free mode left
+and it is still untested - the only attempt ran against 37.8 GiB free with
+flash-next resident, so its `model loading error` says nothing about the flag.
+The entry now runs the main model alone at 89000; whether it earns its place
+beside gufo-deepseek is still the open question, and it is a judgement about
+87970 against 112863 rather than about a broken draft.
 
 `laya` and `openjev-q4` are decision models and nothing here can drive them:
 `/v1/chat/completions` answers 501 "This model is a decision model without text

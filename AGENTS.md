@@ -115,6 +115,16 @@ An engine's delta is what that engine counts, which is not always what the host
 is short: gufo-deepseek reports 101145 while the host gave up 112863, the gap
 being expert staging and its component cache. Take both and claim the larger.
 
+For a gufo entry a third figure has to be weighed: the same load that moved
+MemAvailable by 41208 reported `gpu_device_used_mib=56348`. Two instruments 15
+GiB apart on a box with one pool of RAM, and which one is physically right is
+not settled here - that the host reading is not safe alone is. So a gufo row is
+the larger of the two at `load_completed`. Settling is worse still: the host
+residue fell to 7696 once the weights were uploaded, so a settled reading is the
+staging buffers rather than the model and under-states the load 7x. What would
+settle the device figure is a second model loaded beside it with /proc/meminfo
+watched the whole way, not a third reading of the same load.
+
 llama.cpp logs no `host_available_mib` at all, so for its entries the method is
 to sample `/run/host/proc/meminfo` every half second across the load and take
 the trough. Two things make that trustworthy. Empty the pool first and verify it

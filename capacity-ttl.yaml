@@ -130,19 +130,48 @@ routing:
 
 models:
   deepseek-v4-flash:
-    name: DeepSeek V4 Flash IQ2XXS + DSpark
+    # The "+ DSpark" came out of the name with the flags below. Nothing can be
+    # depending on the old string: under it this entry never answered one
+    # request - every one was a 500 - so the name is free to say what the cmd
+    # does.
+    name: DeepSeek V4 Flash IQ2XXS
+    # The model path alone is longer than this file's 80 columns and a literal
+    # block cannot wrap it: backslash-newline is not a continuation for a
+    # shlex-style splitter (it yields an argument starting with a newline), so
+    # the only honest option is to switch the rule off around the block. These
+    # two comments sit at the key's indentation, so they end the scalar and are
+    # not part of the command - checked below by parsing this file and printing
+    # what llama-swap would get.
+    # yamllint disable rule:line-length
     cmd: |
       ${run}
-      --model /models/deepseek-v4-flash/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf --spec-type draft-dspark --spec-draft-model /models/deepseek-v4-flash/DeepSeek-V4-Flash-DSpark-support-0731.gguf --cache-reuse 256 --cont-batching
+      --model /models/deepseek-v4-flash/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf --cache-reuse 256 --cont-batching
+    # yamllint enable rule:line-length
     cmdStop: podman stop ls-deepseek-v4-flash
     proxy: http://localhost:${PORT}
     # Measured 10:37, host MemAvailable trough across a load with the pool
-    # empty: 87970 MiB for the 81 GiB of weights plus the 131072-token KV. That
-    # probe had to run without --spec-type/--spec-draft-model, because as
-    # written this entry does not load at all - llama-server exits on "unknown
-    # model architecture: 'deepseek4-dspark'" opening the 5.6 GiB draft, so the
-    # claim adds the draft back. gufo serves the same weights (gufo-deepseek).
-    capacities: {mem: 94000}
+    # empty: 87970 MiB for the 81 GiB of weights plus the 131072-token KV, with
+    # a 200 back from a real request under this same cmd. Claiming 89000 for the
+    # arithmetic in TODO.md §1, not because a second load said so.
+    # The DSpark draft is gone from this cmd because no engine on the box can
+    # read it: the draft declares general.architecture = deepseek4-dspark, and
+    # libllama.so.1 in the newest image carries deepseek4 (148 strings),
+    # deepseek2, dspark (26) and dflash - and not one occurrence of
+    # deepseek4-dspark. So --spec-type draft-dspark is an accepted flag naming a
+    # mechanism with no arch behind it, and every request was a 500 after the
+    # engine exited on "unknown model architecture". That is not a stale
+    # container: --pull always keeps this tag current, the image here was built
+    # 2026-11-23T01:24Z and rocm-10.0-strix-llama_20261123T010133 is the newest
+    # build the registry has, llama.cpp 13600 / 403dfcb03.
+    # No flag substitutes for it either way. The main file advertises
+    # deepseek4.nextn_predict_layers but carries no nextn.* or mtp.* tensors, so
+    # there is nothing for --spec-type draft-mtp to draft with. ngram-cache is
+    # the draft-free mode left and it is untested, not failed: the one attempt
+    # ran with flash-next resident on 37.8 GiB free, so its loading error was
+    # about the box, not the flag. Gufo serves the same weights with working
+    # DSpark drafting as gufo-deepseek - 112863 there against 87970 here, which
+    # is the case for keeping this entry; TODO.md §1 still asks it.
+    capacities: {mem: 89000}
     evict_cost: 10
     concurrencyLimit: 4
 
