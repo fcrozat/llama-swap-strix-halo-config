@@ -543,6 +543,20 @@ let GitHub's own GC expire it rather than open a support request over two opaque
 ids. The probe is a `curl -o /dev/null -w '%{http_code}'` against that commit
 URL; when it stops answering, the bundles above have no reason left and go.
 
+Runnable as written, and the SHA comes out of the bundle rather than out of this
+file, so the command survives any later rewrite of it:
+
+```sh
+OLD=$(git bundle list-heads ~/launchers-pre-pi-purge.bundle |
+      awk '/ refs\/heads\/main$/ {print $1}')
+curl -s -o /dev/null -w '%{http_code}\n' \
+  "https://github.com/fcrozat/llama-swap-strix-halo-config/commit/$OLD"
+```
+
+200 on 2026-11-24 20:44, so all three bundles stay. Anything else - or a page
+that no longer renders the deleted file - ends this section: the bundles go,
+along with the paragraph that kept them.
+
 ## 4. What the first inkling2 load left open
 
 gufo-inkling was declared from the host delta (124441 -> 83577 = 40864 MiB with
