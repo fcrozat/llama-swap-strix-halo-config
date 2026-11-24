@@ -27,10 +27,30 @@ macros:
   home: ${env.HOME}
   dir: /var/lib/models/llama
   image: docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-10.0-strix-llama
+  # --ctx-size 65536, where this macro said 131072 until 2026-11-24. Two things
+  # made the case. The family is idle: 72 h of journal, every request to a gufo
+  # entry (flash-next 8302, inkling 38, loom-inkling 116) and not one ${run}
+  # model loaded - so the long window this macro was buying has no buyer, while
+  # the 108114-token prompt on the record was gufo-flash-next, which has its own
+  # macros. And context is the only lever left on a 124000 pool, measured on
+  # qwen3.8-27b at 36479 MiB under 32768 against 54883 under 131072: about 201 B
+  # per token over a ~30 GiB constant that weights do not move. TODO.md §2 has
+  # the fit and the instrument caveat.
+  # An entry that needs the full window says so in its own cmd with ONE
+  # --ctx-size. Do not append a second after ${run}: llama.cpp honours the last
+  # and warns "argument '--ctx-size' specified multiple times", which it has
+  # started deprecating. The capacities in the entries below are deliberately
+  # not lowered with this flag. The pool admits on claims, so the headroom only
+  # arrives once each entry is re-swept at 65536; until then the claims
+  # over-state and the router is stricter than the box, which is the direction
+  # worth being wrong in. A guessed claim is how two models get loaded that do
+  # not fit, and 65536 has been measured on exactly one of these eight.
+  # yamllint disable rule:line-length
   run: |
-    podman run --pull always --rm --replace --name ls-${MODEL_ID} --device /dev/dri --device /dev/kfd --group-add video --group-add render --security-opt seccomp=unconfined --ulimit memlock=-1:-1 --volume ${dir}:/models:ro --publish 127.0.0.1:${PORT}:9941 ${image} llama-server --host 0.0.0.0 --port 9941 --alias ${MODEL_ID} -dev ROCm0 -ngl 999 --spec-draft-device ROCm0 --spec-draft-ngl 99 --ctx-size 131072 --load-mode dio --lazy-mode on-direct --kv-unified --cache-type-k f16 --cache-type-v f16 --flash-attn on --fit off --batch-size 16384 --jinja
+    podman run --pull always --rm --replace --name ls-${MODEL_ID} --device /dev/dri --device /dev/kfd --group-add video --group-add render --security-opt seccomp=unconfined --ulimit memlock=-1:-1 --volume ${dir}:/models:ro --publish 127.0.0.1:${PORT}:9941 ${image} llama-server --host 0.0.0.0 --port 9941 --alias ${MODEL_ID} -dev ROCm0 -ngl 999 --spec-draft-device ROCm0 --spec-draft-ngl 99 --ctx-size 65536 --load-mode dio --lazy-mode on-direct --kv-unified --cache-type-k f16 --cache-type-v f16 --flash-attn on --fit off --batch-size 16384 --jinja
   moe: |
     --spec-type draft-mtp --spec-draft-n-max 3 --cache-reuse 256 --cont-batching --ubatch-size 4096
+  # yamllint enable rule:line-length
   gufo_cache: /var/cache/gufo
   # installed by ./run-gufo.sh ext install. A model loads a module only if its
   # image's extension API matches the one it was built against, so the :latest
@@ -129,54 +149,6 @@ routing:
           gufo-27b: 3
 
 models:
-  deepseek-v4-flash:
-    # The "+ DSpark" came out of the name with the flags below. Nothing can be
-    # depending on the old string: under it this entry never answered one
-    # request - every one was a 500 - so the name is free to say what the cmd
-    # does.
-    name: DeepSeek V4 Flash IQ2XXS
-    # The model path alone is longer than this file's 80 columns and a literal
-    # block cannot wrap it: backslash-newline is not a continuation for a
-    # shlex-style splitter (it yields an argument starting with a newline), so
-    # the only honest option is to switch the rule off around the block. These
-    # two comments sit at the key's indentation, so they end the scalar and are
-    # not part of the command - checked below by parsing this file and printing
-    # what llama-swap would get.
-    # yamllint disable rule:line-length
-    cmd: |
-      ${run}
-      --model /models/deepseek-v4-flash/DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf --cache-reuse 256 --cont-batching
-    # yamllint enable rule:line-length
-    cmdStop: podman stop ls-deepseek-v4-flash
-    proxy: http://localhost:${PORT}
-    # Measured 10:37, host MemAvailable trough across a load with the pool
-    # empty: 87970 MiB for the 81 GiB of weights plus the 131072-token KV, with
-    # a 200 back from a real request under this same cmd. Claiming 89000 for the
-    # arithmetic in TODO.md §1, not because a second load said so.
-    # The DSpark draft is gone from this cmd because no engine on the box can
-    # read it: the draft declares general.architecture = deepseek4-dspark, and
-    # libllama.so.1 in the newest image carries deepseek4 (148 strings),
-    # deepseek2, dspark (26) and dflash - and not one occurrence of
-    # deepseek4-dspark. So --spec-type draft-dspark is an accepted flag naming a
-    # mechanism with no arch behind it, and every request was a 500 after the
-    # engine exited on "unknown model architecture". That is not a stale
-    # container: --pull always keeps this tag current, the image here was built
-    # 2026-11-23T01:24Z and rocm-10.0-strix-llama_20261123T010133 is the newest
-    # build the registry has, llama.cpp 13600 / 403dfcb03.
-    # No flag substitutes for it either way. The main file advertises
-    # deepseek4.nextn_predict_layers but carries no nextn.* or mtp.* tensors, so
-    # there is nothing for --spec-type draft-mtp to draft with. The draft-free
-    # mode left, ngram-cache, was measured on 2026-11-24 and loses: 15.02 t/s on
-    # a novel completion against 17.08 undrafted, and 16.22 t/s even on a prompt
-    # built to feed it that reached 0.446 draft acceptance (TODO.md §1). So no
-    # speculation is the right cmd here, not merely the only loadable one. Gufo
-    # serves the same weights with working
-    # DSpark drafting as gufo-deepseek - 112863 there against 87970 here, which
-    # is the case for keeping this entry; TODO.md §1 still asks it.
-    capacities: {mem: 89000}
-    evict_cost: 10
-    concurrencyLimit: 4
-
   gufo-27b:
     name: Qwen3.8 27B Q4_K_XL (gufo, dflash2)
     useModelName: Qwen3.8-27B
@@ -507,7 +479,8 @@ models:
     # plus the MTP draft (16.45 + 1.28 on disk) - llama.cpp logs no KV size at
     # this verbosity to say what the rest is. TODO.md §2 has the fit, the
     # instrument caveat, and the fact that a quarter of the context buys back
-    # a third, not three quarters.
+    # a third, not three quarters. The run macro now asks 65536, so this claim
+    # is conservative until the entry is re-swept at what it actually runs.
     capacities: {mem: 55000}
     evict_cost: 40
     concurrencyLimit: 1

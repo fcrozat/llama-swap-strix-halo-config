@@ -20,31 +20,27 @@ A fourth measurement deleted an entry rather than changing a number:
 `gufo-inkling` already serves, and 70000 for a second copy of a 47000 model went
 back into the pool (§6, §7).
 
-**What is left, in the order worth taking it.** Every number in the config is now
-measured or composed from an engine's own lines - with the two exceptions §1
-names, `laya` loaded but never driven and `openjev-q4` refusing every request it
-is given - so what remains is decisions and footprint, not accounting.
+**What is left.** Four questions were decided on the afternoon of 2026-11-24 and
+all four are now in the config or parked with their precondition: §2's footprint
+lever (the `run` macro asks 65536, tiered by role), §4's inkling trio (prefill
+measured at 19k, thinking-off confirmed, effort left alone), §5's two hipfire
+questions (no `$HIPFIRE_HOME` volume, no symtrunk pull), and §1's duplicate
+DeepSeek (`deepseek-v4-flash` is out of the file). What remains is
+follow-through rather than judgement:
 
-1. §2's footprint lever: `--context 131072` is what the pool is being spent on
-   (46 GiB per session on ds41, ~36 GiB on a dense 27B), and lowering it is the
-   only thing that buys concurrency back. Needs a restart window, not exclusivity
-   - our own requests measure the delta.
-2. §4's three inkling questions (prefill at a real length, whether
-   `enable_thinking: false` reaches the extension, whether `--reasoning-effort
-   xhigh` is worth its latency). None needs exclusivity, all need a window.
-3. §5's hipfire questions: `$HIPFIRE_HOME` is settled - no volume, measured on
-   the serve path. What is left of the second is a pull decision rather than a
-   measurement: `qwen3.8:flash-next-mq4-xts-symtrunk` is a registry tag with no
-   file on this box, and the 66.0 GiB its sharing arithmetic rests on is header
-   metadata, not an installed size.
-4. §1's standing judgement, now that speculation is closed by measurement rather
-   than by absence: does `deepseek-v4-flash` (89000, no draft) earn its place
-   beside `gufo-deepseek` (112000, DSpark drafting working)?
+1. Re-sweep the eight `${run}` claims at the 65536 they now actually run. The
+   claims still date from 131072, so until they move the config is stricter than
+   the hardware on purpose - §2 says why the two cannot be changed in one step.
+   Needs a window where our own requests are the only traffic, not exclusivity.
+2. §1's two anomalies measurement did not resolve: `laya` loaded but never
+   driven, and `openjev-q4` refusing every request it has been given.
+3. §2's resident-set question, which the smaller contexts make sharper: ds41 is
+   exclusive by construction and preload warms flash-next - which set do we want
+   warm?
 
-One thing is blocked rather than open: §4's device-versus-host question needs
-either root on the host or a window when nobody else wants a model, and neither
-is available while an agent session answers from this box (§1's last subsection
-says why a probe is the unsafe shape, not merely the inaccurate one).
+Nothing is blocked. §4's device-versus-host question was closed by decision
+rather than by a root read, and §4 says so plainly rather than leaving a note
+that somebody with root ought to look.
 
 ## 1. The ten entries that were guesses, measured
 
@@ -115,6 +111,17 @@ main GGUF loads and serves fine, measured at 87970 with `--spec-type` and
 `--spec-draft-model` dropped and a 200 back from a real request. gufo has the
 same weights as a built-in (`deepseek_v4_flash`) and serves them as
 `gufo-deepseek`, which is the entry that works.
+
+Decided 2026-11-24 at 15:40: `deepseek-v4-flash` is out of the config, and the
+honest reason is not memory. Its whole case was that 89000 costs 23863 less than
+`gufo-deepseek`, but that saving is unspendable - the two can never both be
+resident (201863 against a 124000 ceiling), so the row never held pool that the
+other entry could use, and dropping it frees nothing. What it removes is a
+second, slower, draft-free route to one GGUF (17.08 t/s against gufo's drafting)
+and a row that has to be re-validated on every image bump. Because the entry no
+longer carries them, this section is where the reasons its flags died now live:
+the arch string `deepseek4-dspark` that build 13600 has never heard of, the
+absent `nextn.*` tensors, and the `ngram-cache` measurement below.
 
 Asked whether the draft could be fixed rather than dropped: no flag can, on this
 engine. `--spec-type` lists `draft-dspark`, so the mechanism is compiled in, but
@@ -224,9 +231,23 @@ memory settled 30 s after a 154-token generation. What makes them comparable is
 `-lv 4` load that prints the KV cache size would replace the fit with a
 measurement and is the cheap next step.
 
-Nothing shipped changed. The entry still asks for 131072, because the clients on
-this box send 108k-token prompts (§1) and deciding what they are allowed to ask
-for is the operator's call rather than a measurement's.
+Decided 2026-11-24 and applied: the `run` macro asks 65536 now, tiered by role,
+and the journal is what said which roles exist - 72 h of it, 8302 requests to
+`gufo-flash-next`, 116 to `loom-inkling`, 38 to `gufo-inkling`, and not one load
+of any `${run}` model. The long window this macro was buying had no buyer in that
+family, while the 108k-token prompt on the record (§1) is gufo traffic and keeps
+its window, gufo having its own macros.
+
+The order of the two halves matters, so only one moved. The pool admits on
+claims, so a smaller `--ctx-size` changes what a container holds and nothing
+about what the router allows; the eight entries keep their 131072-era claims
+until each is re-swept, which leaves the config deliberately stricter than the
+hardware until then. On the one entry swept at a quarter context the fit says
+what re-sweeping should return: 30 GiB + 65536 x 201 B puts `qwen3.8-27b` about
+44000 rather than 55000, and that is when the 74000-of-two-27Bs above stops
+being a prediction. An entry that needs the full window says so itself, with one
+`--ctx-size 131072` in its own cmd - not a second one after `${run}`, which
+llama.cpp resolves to the last value while warning that it is deprecated.
 
 Open question for the same pass: which models do we actually want resident at
 the same time? gufo-ds41 (122000) is exclusive by construction now, and preload
@@ -408,6 +429,16 @@ Also open on that entry:
   lever demonstrated here; retuning effort is not worth a restart until there is a
   fixed seed and a longer generation to compare.
 
+Decided the same afternoon on the accounting gap: **57000 is the permanent claim**
+and the discrepancy is documentation, not an open item. Settling it properly needs
+root on the host - `smaps_rollup` answers `Permission denied` from here, the
+libpod cgroup is unreadable, and `podman stats` reports `0B / 133.6GB` for a
+process known to hold 41 GiB - and the prize is roughly 10000 of pool against the
+possibility of seating a neighbour on a model already near 55 GiB. The engine's
+own larger figure wins on a box where the cheaper instrument is the one in doubt.
+Where the other 15 GiB goes is left for someone with root; nothing in the config
+now waits on the answer.
+
 ## 5. What the hipfire image switch measured, and what it left open
 
 The four `hipfire-*` entries now run upstream's `ghcr.io/warpfront/hipfire:0.4.7`
@@ -534,8 +565,12 @@ Also open on this engine:
   is resident, including the model an answering session runs on. And its own
   header-based `fit` at the trained 262144 says `DOES NOT FIT ... 62475 MiB routed
   experts + 5115 MiB non-expert weights`, so the context it would be capped to is
-  the first thing to settle, not the last. Deliberately left: a pull decision
-  before it is a measurement.
+  the first thing to settle, not the last.
+  Decided 2026-11-24: **not pulled**, and parked here as its precondition - a
+  reason to want flash-next beside inkling, a context cap its own header accepts,
+  and a window whose eviction an answering session can spare. A 66 GiB pull is an
+  expression of intent rather than a measurement, and none of the three exists
+  yet.
 
 ## 6. Inkling on Loom: closed, the package never needed Loom
 
