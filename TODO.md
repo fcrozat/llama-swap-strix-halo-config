@@ -29,12 +29,14 @@ DeepSeek (`deepseek-v4-flash` is out of the file). So were the two follow-throug
 items that survived them: the six `${run}` claims were re-swept at the 65536 the
 macro actually asks (§1, 17:41-17:51, 51000 of claim back out of the pool), and
 both decision models have answered through `/v1/systemone`. The gufo side of the
-same lever was then looked at and deliberately left alone, so one question is
-left:
+same lever was then looked at and deliberately left alone, and so was the last
+question on this list:
 
-1. §2's resident-set question, which the smaller contexts make sharper: ds41 is
-   exclusive by construction and preload warms flash-next - which set do we want
-   warm?
+1. §2's resident-set question, answered as asked: flash-next stays the warm
+   default and ds41 stays exclusive. Traffic settled it rather than arithmetic -
+   72 h of journal, 8302 requests to flash-next, exactly one load of ds41, and
+   that load was the measurement that wrote ds41's number. The exclusivity has
+   no victim yet.
 
 `--context` on the gufo side is no longer an open item and the reason is written
 where a reader will meet it - the `gufo_serve_tail` comment - rather than left as
@@ -252,8 +254,8 @@ With its measured 112000 it could not share the old 118000 pool with anything,
 so every model switch evicted it and the next request paid a 10-20 s cold load.
 It is also the preload model and the one interactive sessions run on, so the
 switch cost was paid by whoever typed next. At 124000 it can share with the
-cheapest claim (9000) and nothing else - one step, not a fix, and the question
-below still stands.
+cheapest claim (9000) and nothing else - one step, not a fix. The resident-set
+question below is what this section was for, and it is answered there.
 
 That is what already happened physically; the number only says so out loud. If
 the cost is unwanted, bound the footprint instead of reflating the number back to
@@ -297,9 +299,14 @@ still not beside both (131000 against a 124000 ceiling).
 The instrument caveat, because the two figures are not the same kind: the 131072
 numbers are load troughs from this morning's sweep, the 32768 number is free
 memory settled 30 s after a 154-token generation. What makes them comparable is
-§1's own observation that settled and trough agree on every llama.cpp row; a
-`-lv 4` load that prints the KV cache size would replace the fit with a
-measurement and is the cheap next step.
+§1's own observation that settled and trough agree on every llama.cpp row. A
+`-lv 4` load that prints the KV cache size would replace that fit with a
+measurement, and it is the next window to take - chosen 2026-11-24. One verbose
+load, no pool emptied for it, and it retires this comment's arithmetic.
+
+The two pairs the raise below admitted are deliberately not in that window: they
+stay unproven until something actually fails, which is the only evidence worth
+spending a window on here.
 
 Decided 2026-11-24 and applied: the `run` macro asks 65536 now, tiered by role,
 and the journal is what said which roles exist - 72 h of it, 8302 requests to
@@ -330,10 +337,22 @@ admitted at 2500 beside a resident flash-next and evicted nothing, then unloaded
 That is also the cheapest way to check a macro change reaches the family: pick an
 entry whose claim leaves room, not one that would move the warm model.
 
-Open question for the same pass: which models do we actually want resident at
-the same time? gufo-ds41 (122000) is exclusive by construction now, and preload
-says flash-next should be the warm default - which means ds41 is the one that
-eats the warm default whenever anyone asks for it, at 133.9 s to come back.
+**Decided 2026-11-24: this is the resident set.** flash-next stays the warm
+default and ds41 stays exclusive, and the traffic is what tipped it: 72 h of
+journal, 8302 requests to flash-next against one load of ds41, and that load was
+the measurement that produced the 122002. Two alternatives were weighed against
+leaving it alone, and both cost more than they buy:
+
+- `pools.mem` at 121000 instead of 124000 puts ds41's claim over the pool, so
+  llama-swap refuses it rather than evicting flash-next. That protects a warm
+  model nobody has complained about by making a measured entry unaskable-for.
+- Changing what `hooks.on_startup` preloads (nothing, or the cheap pair) moves
+  what is warm after a restart, not who wins the fight - and flash-next is the
+  model the sessions actually run on.
+
+So the cost is carried with its size known: one ds41 request makes the next
+flash-next request pay 133.9 s. The footprint lever below remains the way out if
+that ever stops being acceptable.
 
 ### gufo-ds41 decided this section, 2026-11-24
 
@@ -383,8 +402,9 @@ number leaning on a guess:
 
 - `gufo-flash-next` (112000, measured) with `hipfire-4b` (9000) at 121000.
 - `hipfire-flash-next` (95000, composed worst case, `npu: 1`) with the cheapest
-  non-hipfire claim, 26000, also at 121000. That one was exclusive by arithmetic
-  at 118000 (see §5's eviction record) and it is not any more.
+  non-hipfire claim - `openjev-q4`, re-measured to 24000 the same evening, so
+  119000 rather than the 121000 first written here. That pair was exclusive by
+  arithmetic at 118000 (see §5's eviction record) and it is not any more.
 
 Neither is wrong yet; both are unproven, because the small half of each pair is
 one of §1's ten. That is the real cost of the raise and the reason the list
@@ -429,11 +449,11 @@ safety bundles sit in the home directory, both taken before the scrub, so both s
 name - `launchers-pre-rewrite.bundle` additionally carries the upstream docs.
 Both are still on disk as of 2026-11-24. The readback they were kept for has
 happened - `origin/main` was fetched and every object in it inspected, with no
-account name, hostname, credential or private address in any path or blob - so
-their condition is met and deleting them is the owner's call, not a step left to
-discover. All three bundles are the last thing to delete: each is one file
-holding exactly what a rewrite removed, and the newest holds the harness state
-this rewrite took out.
+account name, hostname, credential or private address in any path or blob. They
+are kept a little longer on purpose: until the
+SHA-cache probe below stops answering, they are the only way back to the state
+before this rewrite. Each holds exactly what a rewrite removed, and the newest
+holds the harness state this one took out.
 
 Purged on 2026-11-24, on the owner's word: `.pi/subagentura-state.json` had been
 in the tree. 230 bytes of agent-harness bookkeeping - a parent session UUID and
@@ -469,6 +489,15 @@ taken before this rewrite. The push is a `--force-with-lease` naming the
 pre-purge tip, so it fails rather than clobbering if anything else moved `main`.
 After it every hash here is new, and anyone who cloned must re-clone or reset -
 the door this section said was closed, reopened deliberately once.
+
+A rewrite does not reach GitHub's cache of unreferenced commits. The pre-purge
+tip still answers at its own SHA URL, and the `.patch` GitHub renders for it
+shows the deleted file, so the two session UUIDs are readable there today.
+Nothing reachable from a ref carries them - a fresh clone cannot even `cat-file`
+that commit - and no machine but this one ever held the SHA. Decided 2026-11-24:
+let GitHub's own GC expire it rather than open a support request over two opaque
+ids. The probe is a `curl -o /dev/null -w '%{http_code}'` against that commit
+URL; when it stops answering, the bundles above have no reason left and go.
 
 ## 4. What the first inkling2 load left open
 

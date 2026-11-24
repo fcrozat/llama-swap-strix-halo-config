@@ -231,7 +231,12 @@ models:
     # evicted for it - that 133.9 s reload is the price. Cutting --context is
     # the lever if that stops being acceptable; it was asked on 2026-11-24 and
     # left alone, because this is the family with long-context traffic, so the
-    # exclusivity is accepted rather than worked around. TODO.md §2.
+    # exclusivity is accepted rather than worked around. Asked a second time the
+    # same evening with traffic in hand, and it stands: 72 h of journal is 8302
+    # requests to flash-next against one load of ds41, and that load was its own
+    # measurement. Lowering pools.mem under this claim would make ds41 refuse
+    # rather than evict, trading a warm model nobody misses for this entry being
+    # unaskable. TODO.md §2.
     capacities: {mem: 122000}
     evict_cost: 60
     concurrencyLimit: 1
