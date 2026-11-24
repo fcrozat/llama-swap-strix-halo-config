@@ -594,8 +594,9 @@ curl -s -o /dev/null -w '%{http_code}\n' \
   "https://github.com/fcrozat/llama-swap-strix-halo-config/commit/$OLD"
 ```
 
-200 on 2026-11-24 20:44, so all three bundles stay. Anything else - or a page
-that no longer renders the deleted file - ends this section: the bundles go,
+200 twice on 2026-11-24 (20:44, then 21:02, when the page still rendered the
+deleted filename six times), so all three bundles stay. Anything else - or a
+page that no longer renders the deleted file - ends this section: the bundles go,
 along with the paragraph that kept them.
 
 ## 4. What the first inkling2 load left open
