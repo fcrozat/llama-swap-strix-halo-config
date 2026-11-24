@@ -174,12 +174,19 @@ keeping its own session alive. Clear the lock by hand when the window closes,
 though: `pkill -f loopback-watchdog` matches the command line of the shell that
 runs it and kills that shell before its `rm`.
 
-Serving yourself is the harder half. Unload the engine the agent answers from
-and then issue no model request of its own until the sweep is over - otherwise
-the box reloads its own 112 GiB model between two entries and the baseline
-becomes that eviction, which voided two rows of the sweep that set these
-capacities. One detached batch, one blocking wait for it, and no tool call that
-talks to a model inside the window.
+Serving yourself is the harder half, and the only shape that survives it is one
+synchronous tool call per sweep. A detached batch with its wait in a separate
+call cannot work: returning from the wait is itself a request to your own model,
+so the box reloads its 112 GiB engine inside the window and the baseline becomes
+that eviction - that voided rows twice on 2026-11-24.
+
+Nor is your session the only one. Ninety idle seconds logged six
+`/v1/chat/completions` against the preload model, one of them a 108114-token
+prompt, so a live agent works on these models and stopping its engine answers
+the in-flight request with a 500. Unload what you are served by, keep every
+model request out of the window, and read a `capacity: model=... evict=[...]`
+line dated inside that window as grounds to void the row: something else wanted
+a model while you were measuring.
 
 ## Engines and their flag sets
 

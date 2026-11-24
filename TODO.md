@@ -5,14 +5,15 @@ to apply a config change without taking the agent's own model down, how to
 measure what a model really costs, and what belongs to the distro package rather
 than to this tree.
 
-Measured 2026-11-22 through 2026-11-24. Of the seventeen entries, three carry a
-number from the host delta: gufo-flash-next 112000 (111.8 GiB), gufo-inkling
-47000 (40864 MiB, projector included) and gufo-ds41 122000, measured 122002 -
-the first entry found claiming less than it costs, and it now declares the
-measurement (§2). Four more - the `hipfire-*` set - are composed from the
-engine's own load lines, which is a different method and says so in the entry
-(section 5). The other ten are still claims, and flash-next was 3.3x
-under-declared until someone measured it, so assume the ten are too.
+Measured 2026-11-22 through 2026-11-24. Three entries were already declared from
+a load before this week: gufo-flash-next 112000 (111.8 GiB), gufo-inkling and
+gufo-ds41 122000, measured 122002 - the first entry found claiming less than it
+costs, and it now declares the measurement (§2). Four more - the `hipfire-*` set
+- are composed from the engine's own load lines, which is a different method and
+says so in the entry (section 5). The other ten were claims, and flash-next was
+3.3x under-declared until someone measured it; §1 has the figures. gufo-inkling
+has since moved off the host delta, because on a unified box the host number is
+not the bigger one (§4).
 
 A fourth measurement deleted an entry rather than changing a number:
 `loom-inkling` measured 52867 on a path that turned out to serve the same GGUF
@@ -215,21 +216,34 @@ been read back from the remote and confirmed good.
 
 ## 4. What the first inkling2 load left open
 
-gufo-inkling is declared from the host delta (124441 -> 83577 = 40864 MiB with
-the projector, 39972 without, at 4 sessions / 131072) but the same
-`load_completed` line reports `gpu_device_used_mib=56150` (55250 without it). The
-host delta is what the pool is about, so that is what was declared; if the device
-figure is the real claim then 47000 lets in co-residency the box cannot pay. The
-gap moved by 900 MiB with the projector, the same as the host delta did, so the
-two figures track each other rather than one of them being wrong about the
-projector. Read both again on the next load, and settle it by watching
-/proc/meminfo while a second model loads beside it.
+gufo-inkling was declared from the host delta (124441 -> 83577 = 40864 MiB with
+the projector, 39972 without, at 4 sessions / 131072) while the same
+`load_completed` line reported `gpu_device_used_mib=56150` (55250 without it),
+and the question was which of the two the pool owes. Settled on the second load,
+12:09 on inkling2 0.1.3 with the pool verified empty: host trough 41208, engine
+`host_available_mib` delta 41064 - 0.3% apart, so both instruments agree - and
+`gpu_device_used_mib=56348`. 57000 is now declared, on the device figure.
+
+Which of the two is physically right is still not known - this box has one pool
+of RAM, so 41208 and 56348 cannot both be the whole story, and the difference
+has not been pinned to kfd pages being invisible to `MemAvailable` rather than
+to gufo reserving device address space it has not committed yet. What is settled
+is that the host delta is not safe on its own: at 47000 llama-swap would run
+another 77000 of pool beside a model that may already be 55 GiB in. The other
+half of the trap is timing: the residue fell to 7696 MiB once the weights were
+uploaded, so a gufo entry measured after it settles under-reads 7x - the host
+figure at that point is the staging buffers, not the model. Hence the rule for
+this family: the larger of the two figures at `load_completed`, never a settled
+one. What would actually close it is a second model loaded beside inkling with
+/proc/meminfo watched the whole way, which needs a window nobody is using.
 
 Also open on that entry:
 
-- decode was 43.4 tok/s on one 48-token completion - not the head-to-head against
-  the Loom engine it replaced as the `Inkling-2-Mini` name, and prefill was never
-  measurable at 27 prompt tokens. Both numbers before the fallback is deleted.
+- decode was 43.4 tok/s on one 48-token completion, and 43.5 on a 74-token one
+  after the 0.1.3 bump, so the figure reproduces even though it is still not the
+  head-to-head against the Loom engine it replaced as the `Inkling-2-Mini` name.
+  Prefill measured 172.7 tok/s at 22 prompt tokens, which is too short to mean
+  anything: a 108k-token request is what these sessions actually send.
 - `enable_thinking: false` still returned 41 `reasoning_tokens` (content was
   right). The extension says reasoning-off is its own doing, not the template's,
   so check whether gufo's flag reaches it before clients rely on it.
@@ -339,8 +353,9 @@ Also open on this engine:
   rebuild shows up in the cold-start time; measure before adding a mount.
 - `qwen3.8:flash-next-mq4-xts-symtrunk`, 66.0 GiB per `fit`, is a rung 0.4.2 did
   not offer. At 66000 it would be the first flash-next that could share a pool
-  with anything - 66000 plus gufo-inkling's 47000 is 113000, inside the 124000
-  of today - which is the question section 2 asks about the gufo entry.
+  with anything - 66000 plus gufo-inkling's 57000 is 123000, inside the 124000
+  of today with 1 GiB to spare - which is the question section 2 asks about the
+  gufo entry.
 
 ## 6. Inkling on Loom: closed, the package never needed Loom
 

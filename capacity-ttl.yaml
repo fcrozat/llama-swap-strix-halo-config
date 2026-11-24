@@ -309,7 +309,21 @@ models:
     cmdStop: podman stop ls-gufo-inkling
     checkEndpoint: /ready
     proxy: http://localhost:${PORT}
-    capacities: {mem: 47000}
+    # Measured 12:09 on inkling2 0.1.3 with the pool verified empty: host
+    # MemAvailable trough 41208 and the engine's own host_available_mib delta
+    # 41064 - 0.3% apart, so both instruments agree - and gpu_device_used_mib
+    # 56348 on that same load_completed line. 15 GiB between them on a box with
+    # one pool of RAM, so they cannot both be the whole story and the entry
+    # claims the larger. Which is physically right is open (TODO.md §4 says
+    # what would settle it); that the host figure alone is not safe is not - at
+    # 47000 llama-swap admits 77000 of neighbours against a model that may
+    # already be 55 GiB in. Timing matters as much as which figure: the host
+    # residue fell to 7696 once the weights were uploaded, so a reading taken
+    # after a gufo model settles is the staging buffers, not the model.
+    # sessions=4 over context 131072, speculative=off, load 13.2 s, decode 43.5
+    # tok/s, and vision proven the only way that counts - a 64px red PNG came
+    # back "Red".
+    capacities: {mem: 57000}
     # 12 s to bring back against flash-next's 61 s, so it is the one that leaves
     evict_cost: 30
     concurrencyLimit: 4
