@@ -136,8 +136,10 @@ already in the page cache, 0.4% apart, which is what shows the trough is the
 resident set and not cached file reads. Settled and trough agreed on every row
 of that sweep, so llama.cpp commits KV at init and `--ctx-size` sets the bill
 before a token is read - 131072 in the run macro through that sweep, and 65536
-since 2026-11-24, which is why the claims that sweep produced are owed a redo
-(`TODO.md` §2). `TODO.md` §1 has the table.
+since 2026-11-24. The `${run}` claims were retaken at 65536 the same evening and
+moved 3374-13056 MiB depending on how much context the arch buys (`TODO.md` §1);
+the gufo entries are still on 131072 and have not been retaken. `TODO.md` §1 has
+both tables.
 
 Read the label though: hipfire's `free_after_weights=` is memory still free, not
 a weight size. Its KV is `vmm` - the load says `0 MiB committed at load` and

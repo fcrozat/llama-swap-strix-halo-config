@@ -435,17 +435,15 @@ models:
       --model /models/systemone/OpenJev-Q4_K_M.gguf --spec-type none
     cmdStop: podman stop ls-openjev-q4
     proxy: http://localhost:${PORT}
-    # Measured 10:35 on a clean pool (the 10:10 run had an eviction in it and is
-    # void): trough 28046, settled 27989, without running a token. 18 GiB is the
-    # file; the rest was the KV this entry asked the macro for at 131072, and
-    # since 2026-11-24 the macro asks 65536, so the claim is conservative by
-    # roughly half a context term it no longer buys. Not rewritten to a guess -
-    # it is on the re-sweep in TODO.md §2, and it is the one entry that re-sweep
-    # cannot do beside a warm box: 113000 plus 29000 is over the 124000 ceiling,
-    # so admitting it evicts whatever an answering session runs on. Its 501 on
-    # /v1/chat/completions is by design, not a fault: a systemone decision
-    # model, schema written out on laya, which is drivable and was driven.
-    capacities: {mem: 29000}
+    # Re-swept in the 17:41-17:51 window and driven: /v1/systemone answers it,
+    # so unlike every earlier figure for this entry the load was asked
+    # something. Peak 23717, settled 23701, against 28046 at 131072 (the 10:10
+    # run had an eviction in it and stays void). 18 GiB is the file, so ~6 GiB
+    # is the 65536-token KV this entry actually buys. It could not be measured
+    # beside a warm box - 113000 plus this is over the 124000 ceiling - which is
+    # why it waited for the window. Its 501 on /v1/chat/completions is by
+    # design, not a fault: a systemone decision model, schema in TODO.md §1.
+    capacities: {mem: 24000}
     evict_cost: 1
     concurrencyLimit: 4
 
@@ -456,10 +454,11 @@ models:
       --model /models/Ornith/Tiel-Coder-35B-A3B-MTP-UD-Q4_K_XL.gguf ${moe}
     cmdStop: podman stop ls-ornith-35b-a3b
     proxy: http://localhost:${PORT}
-    # Measured 10:16: trough 32229, settled 32189 after a 220-token decode. 22
-    # GiB file, so ~10 GiB of KV - the sparse-attention MoE is a quarter of
-    # what a dense 27B pays for the same 131072 tokens.
-    capacities: {mem: 33000}
+    # Re-swept in the 17:41-17:51 window: peak 28855, settled 28816, against
+    # 32229 at 131072. Only 3374 back where a dense 27B gave up 13000 - the
+    # sparse-attention MoE has little context left to give, the same ratio this
+    # comment already made. 22 GiB file, ~6 GiB of 65536-token KV.
+    capacities: {mem: 29000}
     evict_cost: 30
     concurrencyLimit: 4
 
@@ -470,11 +469,15 @@ models:
       --model /models/Qwen3.6-27B-MTP-GGUF/Qwen3.6-27B-UD-Q8_K_XL.gguf --spec-type draft-mtp --parallel 1 --ubatch-size 16384
     cmdStop: podman stop ls-qwen3.6-27b-q8
     proxy: http://localhost:${PORT}
-    # Measured 10:19: trough 70726, settled 70662. 34 GiB weights + internal
-    # MTP, so ~36 GiB is the 131072-token KV. The old 45000 let the router pair
-    # this with qwen3.8-27b-q8 for a model set that needed 139 GiB on a 124 GiB
-    # box.
-    capacities: {mem: 71000}
+    # Re-swept in the 17:41-17:51 window on a verified-empty pool, at the
+    # 65536 the macro now asks: peak 57670, settled 57602. That is 13056 below
+    # the 70726 this entry cost at 131072 - the context term of TODO.md §2 to
+    # the gigabyte. 34 GiB weights + internal MTP leaves ~23 GiB for the
+    # 65536-token KV. The old 45000 let the router pair this with
+    # qwen3.8-27b-q8 for a model set that needed 139 GiB on a 124 GiB box; the
+    # honest pair is 114000 and does fit, which is the thing the re-sweep
+    # bought.
+    capacities: {mem: 58000}
     evict_cost: 60
     concurrencyLimit: 1
 
@@ -496,9 +499,11 @@ models:
     # plus the MTP draft (16.45 + 1.28 on disk) - llama.cpp logs no KV size at
     # this verbosity to say what the rest is. TODO.md §2 has the fit, the
     # instrument caveat, and the fact that a quarter of the context buys back
-    # a third, not three quarters. The run macro now asks 65536, so this claim
-    # is conservative until the entry is re-swept at what it actually runs.
-    capacities: {mem: 55000}
+    # a third, not three quarters. Re-swept in the 17:41-17:51 window at the
+    # 65536 the macro now asks: peak 41824, settled 41680. The fit predicts
+    # about 43900 here and over-predicted the 131072 point by the same 4-5%, so
+    # it is a usable lever and a bad claim - this measurement is the claim.
+    capacities: {mem: 42000}
     evict_cost: 40
     concurrencyLimit: 1
 
@@ -509,9 +514,10 @@ models:
       --model /models/Qwen3.8-27B-GGUF/Qwen3.8-27B-UD-Q8_K_XL.gguf --spec-type draft-mtp --spec-draft-model /models/Qwen3.8-27B-GGUF/MTP/mtp-Qwen3.8-27B-Q4_0.gguf --parallel 1 --ubatch-size 16384
     cmdStop: podman stop ls-qwen3.8-27b-q8
     proxy: http://localhost:${PORT}
-    # Measured 10:21: trough 67818, settled 67803. 30 GiB weights + draft, ~36
-    # GiB KV - same 131072-token bill as its Q4 sibling.
-    capacities: {mem: 68000}
+    # Re-swept in the same window: peak 55526, settled 55136, against 67818 at
+    # 131072. 12292 back, the same context term §2's fit predicts. 30 GiB
+    # weights + draft, so ~25 GiB of 65536-token KV.
+    capacities: {mem: 56000}
     evict_cost: 60
     concurrencyLimit: 1
 
@@ -522,9 +528,10 @@ models:
       --model /models/Qwen3.6-35B-A3B-GGUF/Qwen3.8-35B-A3B-Q4_K_M.gguf ${moe}
     cmdStop: podman stop ls-qwen3.8-35b-a3b
     proxy: http://localhost:${PORT}
-    # Measured 10:15: trough 31713, settled 31691. 21 GiB file, ~10 GiB KV; the
-    # only entry here that came in under its old claim, and then barely.
-    capacities: {mem: 32000}
+    # Re-swept in the 17:41-17:51 window: peak 27798, settled 27748, against
+    # 31713 at 131072 - 3915 back, MoE again. 21 GiB file, ~6.5 GiB of
+    # 65536-token KV.
+    capacities: {mem: 28000}
     evict_cost: 30
     concurrencyLimit: 4
 

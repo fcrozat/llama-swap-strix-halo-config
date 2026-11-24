@@ -25,23 +25,26 @@ all four are now in the config or parked with their precondition: §2's footprin
 lever (the `run` macro asks 65536, tiered by role), §4's inkling trio (prefill
 measured at 19k, thinking-off confirmed, effort left alone), §5's two hipfire
 questions (no `$HIPFIRE_HOME` volume, no symtrunk pull), and §1's duplicate
-DeepSeek (`deepseek-v4-flash` is out of the file). What remains is
-follow-through rather than judgement:
+DeepSeek (`deepseek-v4-flash` is out of the file). So were the two follow-through
+items that survived them: the six `${run}` claims were re-swept at the 65536 the
+macro actually asks (§1, 17:41-17:51, 51000 of claim back out of the pool), and
+both decision models have answered through `/v1/systemone`. Two things remain,
+one lever and one preference:
 
-1. Re-sweep the eight `${run}` claims at the 65536 they now actually run. The
-   claims still date from 131072, so until they move the config is stricter than
-   the hardware on purpose - §2 says why the two cannot be changed in one step.
-   Needs a window where our own requests are the only traffic, not exclusivity.
-2. Drive `openjev-q4` once. The 501 is by design and the `/v1/systemone` schema
-   is now written down in §1, and `laya` has been driven - so "nothing can speak
-   it" is no longer the reason. `openjev-q4` is the only entry on this box that
-   has never answered anything, and it needs a window rather than a client: its
-   29000 will not join a warm flash-next inside the 124000 ceiling, so loading it
-   evicts whatever is answering. Until then it holds 29000 of claim on a load
-   measured at twice the context the macro now asks for.
-3. §2's resident-set question, which the smaller contexts make sharper: ds41 is
+1. Cut `--context` on the gufo side. `gufo_serve_tail` still carries 131072, so
+   the llama.cpp cut never touched the two largest claims on the box - ds41's
+   122000 and inkling's 57000 - and §2 says ds41's forced exclusivity is what
+   ends if that number moves. This one needs a decision before a measurement:
+   what context do gufo clients use, given the 108k-token prompt on the record
+   is gufo traffic and the journal counts in §2 show no `${run}` load at all.
+2. §2's resident-set question, which the smaller contexts make sharper: ds41 is
    exclusive by construction and preload warms flash-next - which set do we want
    warm?
+
+The window itself stopped being an improvisation today: pin, watchdog, guard that
+refuses a non-empty pool, and a trap that unpins even if the sweep is killed
+(§1's re-sweep note). That makes the next one a decision about cost rather than
+an hour of care.
 
 Nothing is blocked. §4's device-versus-host question was closed by decision
 rather than by a root read, and §4 says so plainly rather than leaving a note
@@ -80,11 +83,13 @@ measured 67818. The sparse-attention MoE pays ~10 GiB for the same context.
 laya gets clamped to `n_ctx_slot 8192` ("the slot context ... exceeds the
 context the model can serve" - the parenthetical names whatever the macro asks
 for, which is 65536 since 2026-11-24) and so costs about a gigabyte.
-openjev-q4 holds 28046 without ever running a token, because it refuses the
-request (below). Reduction is the lever, and the llama.cpp half of it is now
-pulled: the macro went to 65536 (§2) with the eight claims still owed a re-sweep.
-What is left is the gufo side, where `gufo_serve_tail` carries `--context
-131072` and lowering it buys back a model's worth of pool per entry.
+openjev-q4 held 28046 without ever running a token, because it was never asked
+one (below). Reduction is the lever, and the llama.cpp half of it is pulled
+*and* re-measured: the macro went to 65536 and the six `${run}` rows were
+re-swept against an empty pool at 17:41-17:51, which takes 51000 of claim out of
+a 124000 pool. What is left is the gufo side, where `gufo_serve_tail` still
+carries `--context 131072` - which is why the two largest claims on the box,
+ds41's 122000 and inkling's 57000, are untouched by any of today's arithmetic.
 
 Two rows came from a load that evicted something and are void - openjev-q4 at
 10:10 (delta 46, one eviction) and laya's baseline in between sweeps - because
@@ -109,6 +114,37 @@ because llama-swap does not know what an unmanaged container holds and will
 happily load 112000 of pool onto a box where a probe already took 88 GiB - the
 sweep therefore stops its own probe attempt and says so when the pool is not
 empty (24753 MiB free at 13:33), rather than double-booking the machine.
+
+### Re-swept at 65536, 17:41-17:51
+
+The window AGENTS.md prescribes was taken once, in one synchronous call: pin
+`:8080` to loopback with a watchdog, unload flash-next, measure six entries on a
+verified-empty pool, unpin, leave the box answering. 609 s, zero voided rows.
+The cost is on the record too: 37 `refused` lines while pinned, and no 500 and
+no engine error, because refusing a connect cannot kill a generation in flight
+the way an eviction can.
+
+    entry                morning(131072)    peak   settled    back
+    qwen3.6-27b-q8                70726    57670    57602   13056
+    qwen3.8-27b-q8                67818    55526    55136   12292
+    qwen3.8-27b                   54883    41824    41680   13059
+    ornith-35b-a3b                32229    28855    28816    3374
+    qwen3.8-35b-a3b               31713    27798    27748    3915
+    openjev-q4                    28046    23717    23701    4329
+
+`openjev-q4` is the first driven figure of the six: `/v1/systemone` answered it,
+so that row is a load that was asked something, which no earlier row for it
+could say. Peak and settled agree within 470 MiB on every row - the same
+agreement the morning sweep found, and the reason a trough can be trusted here.
+The six peaks are 50025 MiB below the morning's; the claims come down 51000 once
+each is rounded up to the nearest 500: 58000, 56000, 42000, 29000, 28000, 24000.
+
+What the six settle is §2's fit, and what they correct is its use. The dense 27Bs
+gave up 12292 and 13056 where the fit predicted 13.2 GiB - to the gigabyte. The
+MoE pair gave up 3374 and 3915, because sparse attention had spent a quarter of
+what dense pays for the same window, so halving it halves a small term. And the
+pair this whole section turns on, `qwen3.6-27b-q8` with `qwen3.8-27b-q8`, is
+114000 of claim: refused under the measured 131072 figures, admitted again now.
 
 `deepseek-v4-flash` does not load at all. llama-server exits while opening the
 5.6 GiB draft: `failed to load model: unknown model architecture:
@@ -181,11 +217,11 @@ generated.
 Driven, `laya` troughs at 1006 MiB and settles at 976 after five questions some
 of which carried ~750-token states, against 1021 and 1130 from loads nobody
 talked to: traffic does not grow it, so its 2500 is headroom over a measured
-figure now, not an estimate of one. `openjev-q4` is still undriven for an
-admission reason rather than a schema one - 113000 of warm flash-next plus its
-own 29000 is over the 124000 ceiling, so driving it evicts the model an
-answering session runs on. It picks its number up in §2 with the rest, and that
-number will go down: it was measured asking 131072 and the macro now asks 65536.
+figure now, not an estimate of one. `openjev-q4` waited for the same admission
+reason - 113000 of warm flash-next plus its own claim is over the 124000 ceiling
+- and got the same treatment later in the 17:41-17:51 window: `/v1/systemone`
+answers it too, peak 23717 and settled 23701. Both decision-model rows are
+driven figures now, and neither is an idle load.
 
 The ceiling those ten are measured against was settled on 2026-11-24, and not in
 the direction the config comment asked for. It was 118000, a placeholder at
@@ -199,9 +235,10 @@ and it was not good: under the old claims llama-swap would happily run
 qwen3.6-27b-q8 and qwen3.8-27b-q8 together for 90000 of pool while the pair
 actually wanted 138544 - 14 GiB more than the box has, and more than the
 124000 ceiling was ever meant to allow. With the measured figures the same pair
-claims 139000 and is refused, which is the whole point of the sweep. What is
-left to earn is headroom, not accuracy: cut the context these entries ask for
-and the pairs come back.
+claims 139000 and is refused, which is the whole point of the sweep. The
+headroom that paragraph was asking for is earned rather than predicted now: the
+macro asks 65536, the six rows were re-swept at it the same evening, and the pair
+is 114000 and fits.
 
 ## 2. Decide whether flash-next exclusivity is acceptable
 
@@ -265,14 +302,18 @@ of any `${run}` model. The long window this macro was buying had no buyer in tha
 family, while the 108k-token prompt on the record (§1) is gufo traffic and keeps
 its window, gufo having its own macros.
 
-The order of the two halves matters, so only one moved. The pool admits on
-claims, so a smaller `--ctx-size` changes what a container holds and nothing
-about what the router allows; the eight entries keep their 131072-era claims
-until each is re-swept, which leaves the config deliberately stricter than the
-hardware until then. On the one entry swept at a quarter context the fit says
-what re-sweeping should return: 30 GiB + 65536 x 201 B puts `qwen3.8-27b` about
-44000 rather than 55000, and that is when the 74000-of-two-27Bs above stops
-being a prediction. An entry that needs the full window says so itself, with one
+The order of the two halves mattered, so only one moved at a time. The pool
+admits on claims, so a smaller `--ctx-size` changes what a container holds and
+nothing about what the router allows; the entries kept their 131072-era claims
+until re-swept, which left the config deliberately stricter than the hardware for
+about four hours. §1's 17:41-17:51 re-sweep is where that closed, and it checked
+the fit on the way through: 30 GiB + 65536 x 201 B says about 43900 for
+`qwen3.8-27b` and the entry measured 41824, and the same fit over-predicted the
+131072 point by a matching 4-5%. So it is a usable lever and a bad claim, and the
+claims now carry measurements instead. Two dense 27Bs are therefore 84000 of pool
+rather than the 74000 sketched above - worse coexistence than the fit implied,
+still inside the ceiling, and inkling's 57000 sits beside one of them (99000)
+but not both (141000). An entry that needs the full window says so itself, with one
 `--ctx-size 131072` in its own cmd - not a second one after `${run}`, which
 llama.cpp resolves to the last value while warning that it is deprecated.
 
