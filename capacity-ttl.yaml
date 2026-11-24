@@ -165,10 +165,12 @@ models:
     # build the registry has, llama.cpp 13600 / 403dfcb03.
     # No flag substitutes for it either way. The main file advertises
     # deepseek4.nextn_predict_layers but carries no nextn.* or mtp.* tensors, so
-    # there is nothing for --spec-type draft-mtp to draft with. ngram-cache is
-    # the draft-free mode left and it is untested, not failed: the one attempt
-    # ran with flash-next resident on 37.8 GiB free, so its loading error was
-    # about the box, not the flag. Gufo serves the same weights with working
+    # there is nothing for --spec-type draft-mtp to draft with. The draft-free
+    # mode left, ngram-cache, was measured on 2026-11-24 and loses: 15.02 t/s on
+    # a novel completion against 17.08 undrafted, and 16.22 t/s even on a prompt
+    # built to feed it that reached 0.446 draft acceptance (TODO.md §1). So no
+    # speculation is the right cmd here, not merely the only loadable one. Gufo
+    # serves the same weights with working
     # DSpark drafting as gufo-deepseek - 112863 there against 87970 here, which
     # is the case for keeping this entry; TODO.md §1 still asks it.
     capacities: {mem: 89000}

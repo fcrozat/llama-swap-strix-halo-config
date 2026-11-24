@@ -98,9 +98,22 @@ the arch string the draft file names is not - `libllama.so.1` in build 13600
 naming a mechanism and a file naming an arch the loader has never heard of is
 not a misuse of the flag. Nor does the main file draft for itself: it declares
 `deepseek4.nextn_predict_layers` and no `nextn.*` or `mtp.*` tensor, so
-`draft-mtp` has nothing to read. `ngram-cache` is the one draft-free mode left
-and it is still untested - the only attempt ran against 37.8 GiB free with
-flash-next resident, so its `model loading error` says nothing about the flag.
+`draft-mtp` has nothing to read. `ngram-cache` is the one draft-free mode left, and it is measured: slower, and
+out of the config again. Tested on the entry itself through the swap at 14:08 -
+the only shape that is safe while another session is live, because the router
+serialises memory and an unmanaged probe does not - it loaded, served two 200s,
+and decoded worse than plain: 15.02 t/s on a novel 266-token completion against
+17.08 t/s for the same weights undrafted, and 16.22 t/s on a prompt built to feed
+it (one sentence repeated ten times) that reached 0.446 acceptance, 144 drafts
+accepted of 323 generated. Those are llama.cpp's own numbers, not curl's wall
+clock:
+
+    slot print_timing: eval time = 17647.60 ms / 266 tokens (66.59 ms per token, 15.02 tokens per second)
+    slot print_timing: draft acceptance = 0.16304 (15 accepted / 92 generated), mean len = 2.25
+
+Verifying a drafted block costs this model more than its acceptance buys, at
+least until something raises the hit rate far past 45%. Speculation is therefore
+closed for this entry on evidence rather than by omission.
 The entry now runs the main model alone at 89000; whether it earns its place
 beside gufo-deepseek is still the open question, and it is a judgement about
 87970 against 112863 rather than about a broken draft.
