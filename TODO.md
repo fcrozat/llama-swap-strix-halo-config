@@ -34,9 +34,9 @@ follow-through rather than judgement:
    Needs a window where our own requests are the only traffic, not exclusivity.
 2. §1's two remaining anomalies are one thing seen twice: `laya` and
    `openjev-q4` are decision models, so a chat request is a 501 by design and
-   nobody here has ever driven them through `/v1/systemone`. Either find a client
-   for that schema or drop the pair - both claims are load-time figures, not
-   driven ones.
+   nobody here has driven them through `/v1/systemone` once. Either find a
+   client for that schema or drop the pair - both claims are load-time figures,
+   not driven ones.
 3. §2's resident-set question, which the smaller contexts make sharper: ds41 is
    exclusive by construction and preload warms flash-next - which set do we want
    warm?
