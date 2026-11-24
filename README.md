@@ -60,12 +60,13 @@ defaults it on, so the unit sets `Environment=WATCH_CONFIG=false`. Applying a
 config change is an explicit restart, never a file write.
 
 **Memory is measured, not guessed.** The pool is the binding constraint, not the
-GPU: `capacity.pools.mem: 118000` MiB resident at once, `evict_cost` decides who
-leaves, `globalTTL: 900` reclaims after idle. Take the number from the
-`host_available_mib` delta in `podman logs ls-<id>`, read on a load that loaded
-alone - if the load evicted something, that delta counts its memory returning. RSS lies - a model reporting
-6.4 GiB of RSS was holding 111.8 GiB, and the rest is kfd device memory no
-container stat shows.
+GPU: `capacity.pools.mem: 124000` MiB resident at once (97.3% of this box, safe
+only because the two largest claims cannot fit anything beside them),
+`evict_cost` decides who leaves, `globalTTL: 900` reclaims after idle. Take the
+number from the `host_available_mib` delta in `podman logs ls-<id>`, read on a
+load that loaded alone - if the load evicted something, that delta counts its
+memory returning. RSS lies - a model reporting 6.4 GiB of RSS was holding 111.8
+GiB, and the rest is kfd device memory no container stat shows.
 
 **Capability fields lie.** Prove a modality with a request that exercises it - a
 real image that gets answered correctly - not with a field in `/v1/models`.

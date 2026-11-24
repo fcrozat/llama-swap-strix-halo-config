@@ -107,8 +107,18 @@ routing:
       capacity:
         pools:
           # MiB of unified memory allowed resident at once.
-          # measure real usage, then tighten to ~90% of physical
-          mem: 118000
+          # 118000 was a placeholder written before anything was measured. It
+          # went up to 124000 on 2026-11-24 because gufo-ds41 measured 122002 on
+          # a free pool: a ceiling under the largest model means llama-swap
+          # refuses to start that model, a worse failure than a tight box.
+          # 124000 is 97.3% of the 127386 MiB this machine has, and 124910 is
+          # the most free RAM seen here with nothing resident - so the pool is
+          # the machine, with no headroom to speak of. What keeps it standing is
+          # exclusivity: the top two claims (122000, 112000) fit almost nothing
+          # alongside them, the cheapest claim being 9000. The number to revisit
+          # is ds41's footprint (--context 131072 at 2 sessions is where its
+          # 122002 comes from), not this one. TODO.md §2.
+          mem: 124000
           # only one hipfire container may claim /dev/accel/accel0 at a time
           npu: 1
   scheduler:
@@ -184,14 +194,17 @@ models:
     # Measured 2026-11-24 on a free pool, first load of this model here: host
     # available 124455 -> 2453 = 122002 MiB (2 sessions, 131072 context,
     # --stream-experts, dspark draft, disk cache on), 133.9 s to load_completed,
-    # gpu_device_used_mib 120143 of 122880. The 114000 below is 8002 MiB under
-    # that, and 122002 is over the 118000 the pool allows - so the entry as it
-    # stands is allowed to start something the box cannot hold, which is the
-    # condition this file exists to prevent. Raising the claim to the measured
-    # number makes llama-swap refuse to load this model at all, so the fix is a
-    # decision about the ceiling or the sessions, not an edit to one digit:
-    # TODO.md §2.
-    capacities: {mem: 114000}
+    # gpu_device_used_mib 120143 of 122880. What it declared, 114000, was 8002
+    # MiB under that and the pool was 118000 - the entry was permitted to start
+    # something the box cannot hold, the exact condition this file exists to
+    # prevent. Decided 2026-11-24: the ceiling went up to 124000 (see routing
+    # above) and the claim now states the measurement, so the model stays
+    # loadable and the pool admits the truth. Consequence to know before asking
+    # for it: 122000 of 124000 leaves less than the cheapest claim (9000), so
+    # ds41 loads alone or not at all and everything else is evicted for it -
+    # that 133.9 s reload is the price. Cutting --context is the lever if that
+    # stops being acceptable; TODO.md §2.
+    capacities: {mem: 122000}
     evict_cost: 60
     concurrencyLimit: 1
 
@@ -210,8 +223,9 @@ models:
     # warm = 111.8 GiB (2.4 GiB belongs to the monitoring containers). RSS shows
     # 6.4 GiB because the rest is kfd device memory and streaming buffers, and
     # Mlocked stays 0; --cache-ram-bytes is already capped (32 GiB default), so
-    # this is not a cache that will shrink. It therefore cannot share the 118000
-    # pool with any other model - which is what really happens today.
+    # this is not a cache that will shrink. At 112000 of the 124000 pool it can
+    # share with the cheapest claim (9000) and nothing else - close to what
+    # really happens today.
     capacities: {mem: 112000}
     # no ttl key: inherits globalTTL 900 (ttl -1 = inherit, 0 = never unload)
     evict_cost: 50

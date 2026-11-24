@@ -87,14 +87,20 @@ audit found and that no remote is configured yet; `PUBLISHING.md` ends with the
 ## Memory: measured, not guessed
 
 The pool is the binding constraint, not the GPU -
-`routing.router.settings.capacity.pools.mem: 118000` MiB allowed resident at
+`routing.router.settings.capacity.pools.mem: 124000` MiB allowed resident at
 once, `evict_cost` decides who leaves, `globalTTL: 900` reclaims after idle, and
-`npu: 1` keeps a single hipfire container on `/dev/accel/accel0`.
+`npu: 1` keeps a single hipfire container on `/dev/accel/accel0`. That ceiling
+was raised to its current value rather than tightened: 124000 is 97.3% of the
+box, because the largest measured model costs 122002 and a ceiling below a model
+means llama-swap refuses to start it. Nothing protects the machine except that
+the top two claims cannot coexist with much of anything.
 
 Why a model vanished is one grep, and it is also the check on the measurement
 below: `journalctl --user -u llama-swap | grep 'capacity: model='` prints
 `capacity: model=gufo-flash-next evict=[loom-inkling] pools=map[mem:118000 ...]`
-- the model someone asked for and who was stopped to make room.
+and names the model someone asked for and who was stopped to make room. The
+quoted pool value is whatever the config held that day; the `model=` / `evict=`
+pair is the answer.
 
 Read `host_available_mib` from the engine's own `load_started` / `load_completed`
 lines (`podman logs ls-<id>`) and use the delta, but only from a load that

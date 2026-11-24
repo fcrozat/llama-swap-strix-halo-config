@@ -27,35 +27,30 @@ measurement, so it moved to §2.
 
 All ten sit under 48000, which is the interesting property.
 
-For each: the `load_started` -> `load_completed` delta (AGENTS.md, Memory), noted
-against the sessions and context it was loaded with, taken on a load that
-evicted nothing - otherwise the number is the swap, not the model. Then re-check
-the 118000 pool ceiling against 124.4 GiB of physical RAM.
+For each: the `load_started` -> `load_completed` delta (AGENTS.md, Memory),
+noted against the sessions and context it was loaded with, taken on a load that
+evicted nothing - otherwise the number is the swap, not the model.
 
-One entry needs the opposite correction. loom-inkling declares 70000, set from
-the Nix Loom binary's 71509; the gufo-0.36 path it runs now measured 52867 and
-52911 on two cold loads with the pool free. It can come down to about 61000,
-but not to the bare delta: the entry passes no `--cache-ram-bytes`, so its RAM
-cache still has room to grow toward the 32 GiB auto cap on top of what a short
-probe found resident - the same arithmetic behind gufo-inkling's 47000. Pin the
-cap, then re-measure, then lower the claim; both halves are one restart.
-
-Why: loom-inkling at 70000 is allowed to share the pool with anything declared
-under 48000, which is all ten of them. If any holds more than declared, that
-co-residency is the same condition that produced the memory spike this config was
-meant to prevent.
-
-The 118000 ceiling is itself still the placeholder the config comment asks to
-retighten to ~90% of physical: 118000 MiB is 92.6% of the 124.4 GiB (127386 MiB)
-this box has. Settle it against the measured entries, not against the sum of the
-guesses.
+The ceiling those ten are measured against was settled on 2026-11-24, and not in
+the direction the config comment asked for. It was 118000, a placeholder at
+92.6% of the 127386 MiB this box has with a note to retighten it to ~90%; it is
+now 124000, because gufo-ds41 measured 122002 and a ceiling below a model means
+llama-swap declines to start it (§2). So the pool is 97.3% of physical RAM and
+there is no headroom left in the arithmetic - what protects the box is that the
+top two claims (122000, 112000) cannot fit much of anything beside them, the
+cheapest claim being 9000. That makes the ten guesses above load-bearing in a
+new way: a co-resident pair is only safe if both numbers are honest, and two of
+them sitting under one large model is exactly the condition that produced the
+spike this config was written to prevent.
 
 ## 2. Decide whether flash-next exclusivity is acceptable
 
-With its measured 112000 it cannot share the 118000 pool with anything, so every
-model switch evicts it and the next request pays a 10-20 s cold load. It is also
-the preload model and the one interactive sessions run on, so the switch cost is
-paid by whoever types next.
+With its measured 112000 it could not share the old 118000 pool with anything,
+so every model switch evicted it and the next request paid a 10-20 s cold load.
+It is also the preload model and the one interactive sessions run on, so the
+switch cost was paid by whoever typed next. At 124000 it can share with the
+cheapest claim (9000) and nothing else - one step, not a fix, and the question
+below still stands.
 
 That is what already happened physically; the number only says so out loud. If
 the cost is unwanted, bound the footprint instead of reflating the number back to
@@ -65,13 +60,14 @@ the cost is unwanted, bound the footprint instead of reflating the number back t
 - `--context 131072` -> whatever the clients actually use
 - `--cache-ram-bytes N` (default is auto: half of free RAM, capped at 32 GiB)
 
-Rough targets, measured the same way as the baseline: under 48000 lets it coexist
-with loom-inkling, under 4000 also with a 27b. Write the chosen tradeoff into the
-entry's comment so the next reader does not undo it.
+Rough targets, measured the same way as the baseline: under 48000 lets it
+coexist with a 27b, under 30000 with two of them. Write the chosen tradeoff into
+the entry's comment so the next reader does not undo it.
 
-Open question for the same pass: which models do we actually want resident at the
-same time? gufo-ds41 (114000) and loom-inkling (70000) are each exclusive-ish by
-design, and preload says flash-next should be the warm default.
+Open question for the same pass: which models do we actually want resident at
+the same time? gufo-ds41 (122000) is exclusive by construction now, and preload
+says flash-next should be the warm default - which means ds41 is the one that
+eats the warm default whenever anyone asks for it, at 133.9 s to come back.
 
 ### gufo-ds41 decided this section, 2026-11-24
 
@@ -80,24 +76,50 @@ Its first load here, on a pool that was free, took host available
 dspark draft, disk cache enabled, 133.9 s to `load_completed`, and
 `gpu_device_used_mib` 120143 of 122880. Three things follow.
 
-- The declared 114000 is 8002 MiB under what the model takes, and the pool
-  allows 118000, so llama-swap is today permitted to start a model this box
-  cannot hold. 2453 MiB left is not a margin, and the expert cache grows with
-  use rather than stopping at the number.
-- Writing the true figure is not the fix. At `mem: 122000` the entry exceeds
-  the pool outright and llama-swap refuses to load it, which trades a near-OOM
-  for a model nobody can ask for. The choice is the ceiling or the footprint,
-  not the digit.
-- Ceiling: holding ds41 alone with room means `pools.mem` above 122000, past
-  95% of the 127386 MiB this box has, with the monitoring containers and page
-  cache living in the remainder. Footprint: `--sessions 2` is already the small
-  set, so what is left is `--context` and whatever `--stream-experts` sizes its
-  cache from - measure the delta after changing one of them rather than
-  predicting it, and note that 122002 at 131072 x 2 is roughly 46 GiB per
-  session of context state, which says the context is where the memory is.
+- The declared 114000 was 8002 MiB under what the model takes, and the pool
+  allowed 118000, so llama-swap was permitted to start a model this box cannot
+  hold. 2453 MiB left is not a margin, and the expert cache grows with use
+  rather than stopping at the number.
+- Writing the true figure alone is not the fix. At `mem: 122000` with the pool
+  still at 118000 the entry exceeds it outright and llama-swap refuses to load
+  it, which trades a near-OOM for a model nobody can ask for. The digit had to
+  move together with the ceiling.
+- Ceiling: holding ds41 alone means `pools.mem` above 122000, past 95% of the
+  127386 MiB this box has, with the monitoring containers and page cache living
+  in the remainder. Footprint: `--sessions 2` is already the small set, so what
+  is left is `--context` and whatever `--stream-experts` sizes its cache from -
+  measure the delta after changing one of them rather than predicting it, and
+  note that 122002 at 131072 x 2 is roughly 46 GiB per session of context state,
+  which says the context is where the memory is.
 
-Until one of those is chosen, `gufo-ds41` is the entry whose declared number is
-known to be wrong in the direction that matters.
+**Chosen 2026-11-24: the ceiling.** `pools.mem` is 124000 and the entry declares
+122000, so the model stays askable-for and the pool states the truth. The cost
+is accepted knowingly: the box runs at about 2.4 GiB spare with ds41 resident,
+and 122000 of 124000 leaves less than the cheapest claim, so it loads alone and
+every other model is evicted to make room - including the flash-next the preload
+keeps warm. What was written down instead of measured is nothing: both numbers
+are the load's own.
+
+The footprint lever stays available and is the better half if that exclusivity
+stops being acceptable: cut `--context` from 131072 and re-measure the delta,
+and the claim comes down with it. That is a second window, and it is the same
+restart as §1's list.
+
+### What the raise admitted, and why §1 got more important
+
+A ceiling is a permission slip, so 118000 -> 124000 let in pairs that used to be
+refused before start. Two of them are worth naming, because each is a measured
+number leaning on a guess:
+
+- `gufo-flash-next` (112000, measured) with `hipfire-4b` (9000): 121000 admitted.
+- `hipfire-flash-next` (95000, composed worst case, `npu: 1`) with the cheapest
+  non-hipfire claim, 26000: also 121000. It was exclusive by arithmetic at
+  118000 (see §5's eviction record) and it is not any more.
+
+Neither is wrong yet; both are unproven, because the small half of each pair is
+one of §1's ten. That is the real cost of the raise and the reason the list
+moved up the queue: two guesses now get to be co-resident with measured worst
+cases, and the router will only refuse what its own numbers say does not fit.
 
 ## 3. Give the repo a remote
 
@@ -215,8 +237,10 @@ model under test between them, which is what the first attempt did.
   ~165000 of a 124.4 GiB box. With 95000 it says so before starting:
   `capacity: model=hipfire-flash-next evict=[gufo-flash-next] pools=map[mem:
   118000 npu:1]`. The eviction that used to happen physically is now a routing
-  decision. It is exclusive by arithmetic too, not just `npu: 1`: the smallest
-  claim that is not another hipfire entry is 26000, and 95000 + 26000 is 121000.
+  decision. It was exclusive by arithmetic too, not just `npu: 1`: the smallest
+  claim that is not another hipfire entry was 26000 and 95000 + 26000 is 121000,
+  over the 118000 of that day. The ceiling is 124000 now, so that pair is
+  admissible - §2 records what the raise let in.
 - `kernels: no closed route plan` on every tag, for four different reasons: arch
   5 (4b) and arch 6 (35b-a3b) both `UnsupportedRoute`, 27b because of its DFlash
   draft, flash-next because of the trunk overlay. All four then ran `predicted
@@ -260,8 +284,9 @@ Also open on this engine:
   mounts a `hipfire-config` volume for exactly that. Worth a bind only if the
   rebuild shows up in the cold-start time; measure before adding a mount.
 - `qwen3.8:flash-next-mq4-xts-symtrunk`, 66.0 GiB per `fit`, is a rung 0.4.2 did
-  not offer. At 66000 it is the first flash-next that could share the 118000
-  pool with anything, which is the question section 2 asks about the gufo entry.
+  not offer. At 66000 it would be the first flash-next that could share a pool
+  with anything - 66000 plus gufo-inkling's 47000 is 113000, inside the 124000
+  of today - which is the question section 2 asks about the gufo entry.
 
 ## 6. Inkling on Loom: closed, the package never needed Loom
 
