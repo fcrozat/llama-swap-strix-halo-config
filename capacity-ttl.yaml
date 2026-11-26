@@ -72,9 +72,14 @@ macros:
     --spec-type draft-mtp --spec-draft-n-max 3 --cache-reuse 256 --cont-batching --ubatch-size 4096
   # yamllint enable rule:line-length
   gufo_cache: /var/cache/gufo
-  # installed by ./run-gufo.sh ext install. A model loads a module only if its
-  # image's extension API matches the one it was built against, so the :latest
-  # models below skip it ("needs update" in gufo extension list).
+  # installed by ./run-gufo.sh ext install. One module lives here now:
+  # deepseek41flash, which gufo-ds41 needs for --stream-experts (not a core
+  # `serve llm` option, so a skipped module is an "Unknown option" load error
+  # there). A model loads a module only if its image's extension API matches
+  # the one it was built against, so after every `podman pull` this store reads
+  # "needs update" in gufo extension list until ./run-gufo.sh ext update runs -
+  # and /ready still answers 200 while the module is skipped. Inkling no longer
+  # belongs to this rule; inkling2 is built into the image since 0.37.0.
   gufo_ext: ${home}/.local/share/gufo/extensions
   gufo_image: ghcr.io/gufo-org/toolboxes/gufo-runtime:latest
   # SSL_CERT_FILE: the image carries its CA bundle as one file OpenSSL does not
@@ -114,10 +119,10 @@ macros:
   gufo_ds41_run: >-
     ${gufo_pod} ${gufo_image} ${gufo_serve_llm} --sessions 2
     --max-pending-per-client 4 ${gufo_serve_tail}
-  # No loom macro: there is no loom entry. A loom package needs no separate
-  # binary, only GUFO_MODELS_DIR plus a package id for --model, which is written
-  # up where it is useful - the gufo-inkling comment below. The Nix-built gufo
-  # this block used to serve (gufo-nix volume, loom/ symlinks) is gone; TODO §6.
+  # No loom macro: there is no loom entry, and since 0.37.0 no loom package id
+  # to point one at either - `gufo model list` calls inkling-2-mini-loom
+  # "installed, no loaded extension offers it" there. The Nix-built gufo this
+  # block used to serve (gufo-nix volume, loom/ symlinks) is gone; TODO §6.
   ds41_dir: /models/DeepSeek-V4.1-Flash-1017
   ds41_q: DeepSeek-V4.1-Flash-1017-GSQ-RCO-IQ1_M
   ds41_draft: DeepSeek-V4.1-Flash-1017-DSpark-draft-Q2K-Q4K.gguf
@@ -125,8 +130,8 @@ macros:
   # mainline-layout weights, the original DSpark drafter and the ggml-org
   # projector. Inkling-2-Mini-GGUF/README.md in the store carries each file's
   # byte count and sha256, and why those three rather than the files upstream
-  # gives the same names. A mount-level macro, not a per-entry one: the loom
-  # package stays where it is as the module-free fallback.
+  # gives the same names. A mount-level macro, not a per-entry one, and the one
+  # entry over it needs no module: core resolves both inkling2 layouts.
   inkling_dir: /models/Inkling-2-Mini-GGUF
   hipfire_cache: ${home}/hipfire-kcache
   hipfire_dir: /var/lib/models/hipfire
@@ -325,22 +330,26 @@ models:
     evict_cost: 50
     concurrencyLimit: 4
 
-  # Inkling 2 Mini on its own engine: the inkling2 module
-  # (github.com/headbouyJB/inkling2-gufo, installed 0.1.4 = registry release
-  # 24f8342d, api >= 0.3.20 against this build's extension API 0.3.42) rather
-  # than Loom's kernels. It runs on the toolbox image through ${gufo_ext}, so it
-  # is the second module in that store after deepseek41flash and the same rule
-  # applies: after `podman pull`, ./run-gufo.sh ext update, or gufo skips it and
-  # this model cannot load.
+  # Inkling 2 Mini needs no module since gufo 0.37.0 (684b716, extension API
+  # 0.3.47): `gufo --version` lists inkling2 0.1.0 under Built extensions, and
+  # `gufo model list` offers `inkling-2-mini  inkling2  18.8 GB` from that
+  # built-in. Until 2026-11-25 this ran on github.com/headbouyJB/inkling2-gufo
+  # 0.1.4 (registry revision 24f8342d, api >= 0.3.20 against the then-current
+  # extension API 0.3.42), and that module is removed from ${gufo_ext} so a
+  # later `ext update` cannot build it back over the built-in. So the post-
+  # pull rule no longer applies to this entry: a pull could leave the module
+  # `needs update` and gufo would skip it silently behind a 200 /ready, and
+  # core cannot be skipped. ${gufo_ext} now matters only to gufo-ds41.
   # Unsloth reorganised the upstream GGUF repo on 2026-11-23 (rev 8078d149):
   # the root files became mainline llama.cpp's layout (architecture
   # `inkling2_loop`, 744 tensors, `loop_*_ctrl_{gain,forget,down}` and
   # `loop_msg_query`) and the original layout (`inkling2`, 734 tensors,
-  # `loop_attn_gain` and friends) moved to Old_Support/. The extension registers
-  # both keys - `gguf:inkling2_loop` and `gguf:inkling2` - and its README calls
-  # the mainline UD-Q4_K_XL the primary target, so this entry runs the current
-  # root file from ${inkling_dir}/ (17629760736 bytes, sha256
-  # e6427665...) and the package's original-layout copy stays as the fallback.
+  # `loop_attn_gain` and friends) moved to Old_Support/. The built-in registers
+  # both keys - `gguf:inkling2_loop` and `gguf:inkling2`, both strings present
+  # in 0.37.0's own binary - and the README called the mainline UD-Q4_K_XL the
+  # primary target, so this entry runs the current root file from
+  # ${inkling_dir}/ (17629760736 bytes, sha256 e6427665...) and the package's
+  # original-layout copy stays as the fallback.
   # DSpark is OFF, tried on 2026-11-24 and measured out. Both halves of that
   # story are worth keeping. Which file: 0.1.2 declared no speculative mode at
   # all (its extension.json has no `speculative`, no `draft_options` and
@@ -357,6 +366,12 @@ models:
   # original is 54 tensors and every name lines up. It is upstream's
   # dspark-Inkling-2-Mini-Q8_0_Old.gguf (sha256 2ec78510..., the same bytes the
   # loom package has had all along, hard-linked rather than duplicated).
+  # Read that as module history: it settled which file the 0.1.x module could
+  # read, and the module is gone. 0.37.0's inkling2 carries its own DSpark
+  # paths (an Inkling2 DsparkCosts symbol is in the binary), so which tensor
+  # set is admissible on core is a fresh question. What is not fresh but holds
+  # is the measurement below - the drafter lost on this box on rate and on
+  # acceptance - so it stays off until someone reruns that pair on core.
   # Why it is off: same weights, same empty pool, pinned to loopback, the flag
   # the only difference. Copy-heavy (rewrite 40 lines of Python) 38.8 tok/s with
   # dspark against 55.1 without; JS-to-TypeScript 43.7 both ways; a chat probe
@@ -386,39 +401,65 @@ models:
   # the host_available delta is the claim on physical RAM, so that ~15 GiB gap
   # was unexplained - TODO.md §4, whose addendum records that it is not there on
   # the file set this entry loads now.
+  #
+  # First core reading, 2026-11-26 07:13: load_started 124071 (the engine
+  # before it had already given its 111 GiB back) to load_completed 90291 =
+  # 33780, against gpu_device_used_mib 33123 on that same line - 2% apart and
+  # 7307 under the module pair, with `inkling2: decode weight prefetch on (step
+  # 20.75 ms with it, 23.55 ms without)` new in the log. 67.1 s of load, 47.0
+  # tok/s decode on both probes. The claim stays 49300: one load, no loopback
+  # pin, no repeat, and a reduction is the direction that loads two models that
+  # do not fit. TODO.md §8 - swept at 4 sessions over 131072, about 7000 of
+  # pool is waiting there.
   # --mmproj is what enables image input: mmproj-Inkling-2-Mini-Q8_0.gguf
   # (345910944 bytes, sha256 233287272ec5ac39..., byte-identical to
   # huggingface.co/ggml-org/Inkling-2-Mini-GGUF as it stands today - the module
-  # README names that projector for image input, and unsloth's own copy is
+  # README named that projector for image input, and unsloth's own copy is
   # mmproj-F16.gguf at 641805984 bytes) sitting beside the weights in the
   # ${dir}:/models:ro mount. Proved with a real image
   # request through llama-swap, not by reading a capability field - re-proved on
   # this layout at 00:12: a 64px solid-red PNG came back "red" with
-  # prompt_tokens 34, finish=stop. The module
+  # prompt_tokens 34, finish=stop - and again at 07:14 with no module in the
+  # store: "red", finish=stop, prompt_tokens 36. The module
   # README says /v1/models then advertises input_modalities [text, image], and
-  # on gufo 0.35.0 it does not - the engine's /v1/models returns no such key for
-  # any entry, and llama-swap strips what it does not know anyway.
+  # on gufo 0.35.0 it does not. On 0.37.0 the swap's listing does carry that key
+  # for this entry, but for exactly the entries with a capabilities block -
+  # hipfire-4b, whose block says in: [text], is listed text-only - so the object
+  # is the swap rendering this file, not the engine claiming a modality.
+  # On 0.37.0 --mmproj is a core `serve llm` option, not a module-registered
+  # one, which is why it survives here with no module installed. The explicit
+  # path is still needed: core's auto-discovery looks for a sidecar named
+  # mmproj-BF16.gguf beside the model and this file does not go by that name.
   # Sampling is Unsloth's Inkling 2 Mini recommendation (unsloth.ai/docs/models
   # /inkling-2-mini): temperature 1.0, top-p 1.0, top-k 0, min-p 0.0 - no
-  # truncation beyond temperature. The module registers those same four as its
+  # truncation beyond temperature. The module registered those same four as its
   # gufo preset (src/runner.cpp: "Unsloth/OpenAI defaults: temperature 1, no
-  # truncation"), so the flags change nothing today; they pin the vendor numbers
-  # in case a later module release moves its preset. They do not cost clients
-  # per-request control either: flash-next carries --temperature 1.0 the same
-  # way, and against it a request at temperature 0 answered identically three
-  # times while temperature 1.5 gave three different answers. The guide names no
-  # presence/repetition/frequency penalties, so none are added and gufo leaves
-  # them off. It is silent on reasoning effort, which leaves the tail's xhigh
-  # (= 0.99) against the extension's own 0.9 default - TODO.md.
-  # This is the only Inkling entry. The package's GGUF is the way back when the
-  # module is stale: gufo 0.36 reads a package directory's llm_config.json (arch
-  # "inkling2", the GGUF name, vocab 200058) and serves it with
-  # --env GUFO_MODELS_DIR=/models and --model inkling-2-mini-loom instead of the
-  # two paths below. That is the survival route when a `podman pull` leaves
-  # the module stale and skipped - edit the --model line and drop --mmproj with
-  # it (a module-registered option, so leaving it
-  # in turns the fallback into an "Unknown option" load error), and do not
-  # point it at the mainline file: core resolves the package, not the arch.
+  # truncation"); on core the same four are what `serve llm --help` calls the
+  # model preset, so the flags still change nothing and now pin the vendor
+  # numbers against a preset that ships inside the engine every pull. They do
+  # not cost clients per-request control either: flash-next carries
+  # --temperature 1.0 the same way, and against it a request at temperature 0
+  # answered identically three times while temperature 1.5 gave three different
+  # answers. The guide names no presence/repetition/frequency penalties, so
+  # none are added and gufo leaves them off. It is silent on reasoning effort,
+  # which leaves the tail's xhigh
+  # (= 0.99) against the 0.9 default the model preset carries - TODO.md.
+  # This is the only Inkling entry, and with the arch in core it no longer
+  # needs a way back. The old one was: gufo 0.36 read a package directory's
+  # llm_config.json (arch "inkling2", the GGUF name, vocab 200058) and served
+  # it with --env GUFO_MODELS_DIR=/models and --model inkling-2-mini-loom, for
+  # the day a `podman pull` left the module stale and skipped. That route is
+  # closed and not needed: on 0.37.0 `gufo model list` reports
+  # `inkling-2-mini-loom  loom  installed, no loaded extension offers it` -
+  # loom 0.3.6 is built in but offers its models by repository
+  # (`gufo model install loom-fun/<NAME>`), not that pinned id - and the
+  # module-staleness failure it existed for cannot happen to a built-in any
+  # more. So the two paths below are the entry; there is no second form to
+  # switch to, and --mmproj no longer has to come off with it.
+  # The built-in also offers its own download (`gufo model install
+  # inkling-2-mini`, 18.8 GB, UD-Q4_K_XL plus a BF16 projector). Not used: the
+  # weights and the projector proven for image input are already on disk in
+  # ${inkling_dir}, and a store install would move 18.8 GB to gain nothing.
   # It was a second entry until 2026-11-24, when one set of weights was costing
   # the pool 70000 as two entries and 47000 as one. 47000 became 57000 the same
   # day (the 0.1.3 device-instrument reading recorded further below) and 49300
@@ -427,7 +468,7 @@ models:
   # and the DSpark drafter was measured back off. TODO.md §6.
   gufo-inkling:
     name: Inkling-2-Mini Q4_K_XL (gufo, inkling2 kernels)
-    # upstream accepts exactly the id the module lists in /v1/models -
+    # upstream accepts exactly the id the engine lists in /v1/models -
     # "Inkling-2-Mini" and "inkling2" are refused there, so useModelName is not
     # the client name; the alias is.
     useModelName: inkling-2-mini
@@ -480,6 +521,14 @@ models:
     # drafter, not the window length.
     # Same blind spot as flash-next above, same proof (the red PNG recorded on
     # the measurements block), and this is the route that carries --mmproj.
+    # Both readings above are from the extension-API-0.3.42 build with the
+    # external module; the engine here is now 0.37.0 with inkling2 built in. So
+    # the claim is inherited, not re-measured: 49300 is what the old pair
+    # produced, which makes it a claim about weights and a context, not a
+    # reading of the binary running today. It stays until a sweep takes it at
+    # the same 4 sessions / 131072 on a pool verified empty, and the direction
+    # it is wrong in while that is outstanding is the safe one - a stale claim
+    # makes the router stricter than the box, never looser.
     capabilities:
       in: [text, image]
       out: [text]

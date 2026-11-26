@@ -246,9 +246,22 @@ account path is a `home` macro and not a bare `${HOME}`.
 
 Traps around gufo:
 
-- After `podman pull`, run `./run-gufo.sh ext update`. A module compiled for
+- Read `gufo --version` before assuming an arch needs a module. Its `Built
+  extensions` list is what is compiled into the binary, and an arch that came
+  to this box as a module can move inside it: `inkling2 0.1.0` is built in as
+  of 0.37.0 (extension API 0.3.47), so `gufo-inkling` runs on core with no
+  module, and `gufo model list` offers `inkling-2-mini` from the built-in. The
+  installed module of that name is then the thing to remove -
+  `./run-gufo.sh ext remove <name>`, store only - not to rebuild: gufo skips it
+  while it is stale, and `ext update` would build it back over the built-in.
+  `--mmproj` moved the same way and is a core `serve llm` option now, which is
+  why the entry keeps it with no module installed.
+- After `podman pull`, run `./run-gufo.sh ext update` for whatever the store
+  still holds - one module now, `deepseek41flash`, which `gufo-ds41` needs
+  because `--stream-experts` is not a core option. A module compiled for
   another gufo build shows `needs update` and is skipped, so `gufo-ds41` fails
-  to load. Nothing announces the skip to a client: `/ready` still answers 200
+  as an "Unknown option" load error. Nothing announces the skip to a client:
+  `/ready` still answers 200
   and the server only logs `extension <name> is not built for this gufo`, so
   read that log after a pull rather than trusting the health check. The update
   needs no window - store only, no GPU, no port, and a running server keeps the
@@ -258,29 +271,26 @@ Traps around gufo:
   `ext list` says so in its own words ("no reviewed release supports linux and
   extension API x.y.z") rather than as `needs update`. Read the whole list after
   an upgrade, not just the rows belonging to installed modules.
-- Loom is not an engine on this box. A loom *package* is a directory whose
-  `llm_config.json` names an arch and a GGUF (`inkling-2-mini-loom`: arch
-  `inkling2`, `Inkling-2-Mini-UD-Q4_K_XL.gguf`, vocab 200058), and gufo 0.36.0
-  resolves `--model <package id>` to that GGUF and serves it on its own arch
-  support. So `gufo model list` saying `installed, no loaded extension offers
-  it` about a package id, while `serve llm --model <that id>` answers 200, is
-  two different questions - the first is which extension advertises the id, the
-  second is what the loader can read. Only `GUFO_MODELS_DIR` is needed to point
-  at the store; `${gufo_pod}` mounts it without naming it.
-  The `loom` module itself was tried and is gone: it builds against the image's
-  `libloom_text_embed.so` and seats over the built-in, then dies at
+- Loom is not an engine on this box, and since 0.37.0 it is not a way to serve
+  Inkling either. The `loom` module was tried and is gone: it builds against the
+  image's `libloom_text_embed.so` and seats over the built-in, then dies at
   `load_started` with `fatal_signal signal=11` some 230 ms into the container,
   pool free and `seccomp=unconfined` both on and off. It is not in the reviewed
   registry (so `ext update` would rebuild it but never move it), it is removed
   from the live store, and `TODO.md` §6 keeps the numbers in case it is ever
-  revisited. Nothing installed here needs Loom's kernels. What survives is the
-  recipe: `--env GUFO_MODELS_DIR=/models` (which `${gufo_pod}` mounts but does
-  not set) plus `--model inkling-2-mini-loom` runs the same weights through the
-  core loader with no module, the fix for the stale-module trap above.
-  `gufo-inkling` itself keeps the two paths, because the module route is the one
-  that carries `--mmproj` and so vision. A second entry ran the module-free form
-  until 2026-11-24, when one set of weights costing 70000 as two entries was
-  folded into it; a month of journal held no request for the removed alias.
+  revisited. Nothing installed here needs Loom's kernels.
+  What was left behind by that is the loom *package*: a directory whose
+  `llm_config.json` names an arch and a GGUF (`inkling-2-mini-loom`: arch
+  `inkling2`, `Inkling-2-Mini-UD-Q4_K_XL.gguf`, vocab 200058). On gufo 0.36.0
+  `--env GUFO_MODELS_DIR=/models` (which `${gufo_pod}` mounts but does not set)
+  plus `--model inkling-2-mini-loom` resolved that directory and served it
+  through core, which was the way back when the inkling2 module went stale after
+  a pull. That recipe is closed and moot: on 0.37.0 `gufo model list` reports
+  `inkling-2-mini-loom  loom  installed, no loaded extension offers it` - the
+  built-in `loom 0.3.6` offers its models by repository
+  (`gufo model install loom-fun/<NAME>`), not by that pinned id - and with the
+  arch built in there is no stale-module day to have a way back for. Point
+  `--model` at the GGUF path and `--mmproj` beside it; that is the whole entry.
 
 hipfire runs upstream's own image: `ghcr.io/warpfront/hipfire`, `full` variant
 (ROCm 10.1.0-3, kernel packs for gfx1100/gfx1151/gfx1201 baked in), release tag

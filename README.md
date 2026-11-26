@@ -46,9 +46,12 @@ pinned in `hipfire_image`, kernel packs for gfx1151 baked in - so `podman pull`
 is the whole install step, and `./run-hipfire.sh --list` prints the tags that
 image knows.
 
-Gufo models need their modules installed (`./run-gufo.sh ext install <name>`),
-and `./run-gufo.sh ext update` after every `podman pull`, or gufo skips a module
-built for the old one and its model cannot load.
+Most gufo archs are in the engine itself - `gufo --version` prints a `Built
+extensions` list, and Inkling 2 is on it, so that entry needs no install. One
+is not: DeepSeek V4.1 Flash runs on a loadable module (`./run-gufo.sh ext
+install deepseek41flash`), and `./run-gufo.sh ext update` is needed after every
+`podman pull`, or gufo skips a module built for the old API and that model
+cannot load - silently, with `/ready` still answering 200.
 
 ## Four things to know before changing anything
 

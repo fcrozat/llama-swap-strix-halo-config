@@ -1019,4 +1019,70 @@ without the module" is still the unproven half rather than a lost capability. If
 a second context shape is genuinely wanted, it should be a second entry over
 `gufo_run` with its own honest `mem:` - which is a different thing from a second
 engine, and different from this: an entry whose name described a loader it no
-longer used.
+longer used. The half about the projector closed on 2026-11-26: §8.
+
+## 8. Inkling moved into gufo core, and the pull that did it took ds41 down too
+
+gufo 0.37.0 (684b716) extends API 0.3.47 and lists `inkling2 0.1.0` under
+`Built extensions` in `gufo --version`, so the arch is in the binary and needs
+no module. `gufo model list` agrees from the store: `inkling-2-mini  inkling2
+18.8 GB available`. Both arch keys the external module registered are present
+in 0.37.0's own object code (`inkling2` and `inkling2_loop`), which is the
+difference between "the README says so" and this box loading the mainline file.
+
+The general lesson is the one to keep: **read `Built extensions` before
+installing anything for an arch.** An arch that arrived here as a module can
+move inside the engine on a later build, and then the installed module is the
+problem rather than the solution - it goes `needs update` on the next pull,
+gufo skips it, and `ext update` builds it back over the built-in. So the
+`inkling2` 0.1.4 install was removed (`./run-gufo.sh ext remove inkling2`,
+store only) rather than updated, and `ext list` now reads
+`inkling2 0.1.0 [built-in; 0.1.4 available]`: core serving it, the newer module
+left out on purpose. `ext list` naming 0.1.4 is not a to-do item.
+
+The same pull took `deepseek41flash` from ready to `needs update` on 0.3.47,
+and that one has no built-in to fall back to: `--stream-experts` is not a core
+`serve llm` option, so a skipped module is an "Unknown option" load error on
+`gufo-ds41`, not a slower load. `./run-gufo.sh ext update` (48 objects, HIP
+kernels included) returns it to `[installed, ready]`. One module left in the
+store, one entry depending on it.
+
+Proven through llama-swap at 07:12-07:14 on 2026-11-26, with the entry's own
+command line and nothing in the module store: `load_completed` reports
+`model=inkling-2-mini sessions=4 context_tokens=131072 speculative=off` after
+67.1 s, no `not built for this gufo` and no `Unknown option` anywhere in the
+log. The router's line for it is `capacity: model=gufo-inkling
+evict=[gufo-flash-next]` with `pools=map[mem:124000 npu:1]`.
+Image input answered on the same build: the 64px solid-red PNG came back "red",
+`finish=stop`, `prompt_tokens=36`. That also closes §7's unproven half - the
+core loader takes `--mmproj`, so a projector is not a module-only capability.
+Text answered too, and fell into the trap AGENTS.md already documents: 900
+tokens of budget, `finish=length`, 899 of them `reasoning_tokens`, `content`
+empty. The image probe at 600 finished in 85 tokens because the answer needed
+none of that.
+
+What it costs is now the interesting part. `load_started host_available_mib
+=124071` (flash-next had already given its 111 GiB back - the host read 12937
+MiB available while it was resident) and `load_completed host_available_mib
+=90291`: a delta of **33780**, against `gpu_device_used_mib 33123` on the same
+line - the two instruments 2% apart, the tightest pair this entry has ever
+reported, and 7307 below the 41087 the module path measured twice on
+2026-11-24 (§4's addendum). `inkling2: decode weight prefetch on (step 20.75 ms
+with it, 23.55 ms without)` is the new mechanism in the log and a plausible
+reason; 47.0 tok/s decode against the 43.5 recorded then points the same way.
+
+The claim still says 49300, deliberately. One load with a clean baseline is not
+the method: no loopback pin, no second load to show the trough is the resident
+set rather than cached file reads, and the reduction is the direction that gets
+two models loaded that do not fit. What a sweep owes this entry is the pair at
+4 sessions over 131072 on a pool verified empty - `./run-mem-sweep.sh` - and if
+it holds near 34000, roughly 7000 of pool comes back, which on this box is
+almost another hipfire row. Until then 49300 is an inherited claim about these
+weights at this context, not a reading of the binary running today.
+
+Still open because 0.37.0 reopened it: the DSpark drafter. Its off decision
+rests on which tensor set the 0.1.x module could read, and core's inkling2
+carries its own DSpark paths, so that argument is module history now. The
+measurement behind the decision (55.1 tok/s without against 38.8 with, lookup
+acceptance 93.2% against dspark's 62.8%) has not been rerun on core, and the
+drafter file is still on disk.
