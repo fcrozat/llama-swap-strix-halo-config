@@ -5,7 +5,7 @@ to apply a config change without taking the agent's own model down, how to
 measure what a model really costs, and what belongs to the distro package rather
 than to this tree.
 
-Measured 2026-11-22 through 2026-11-24. Three entries were already declared from
+Measured 2026-11-22 through 2026-11-27. Three entries were already declared from
 a load before this week: gufo-flash-next 112000 (111.8 GiB), gufo-inkling and
 gufo-ds41 122000, measured 122002 - the first entry found claiming less than it
 costs, and it now declares the measurement (§2). Four more - the `hipfire-*` set
@@ -55,6 +55,11 @@ a decision about cost rather than an hour of care.
 Nothing is blocked. §4's device-versus-host question was closed by decision
 rather than by a root read, and §4 says so plainly rather than leaving a note
 that somebody with root ought to look.
+
+2026-11-27: the LFM3 family landed five entries (§9) - 2B-class text, VL,
+audio and decision shapes, claimed from the sweep rather than estimated. One
+request is still open: the VL entry's image input, which no request has sent
+yet.
 
 ## 1. The ten entries that were guesses, measured
 
@@ -1086,3 +1091,69 @@ carries its own DSpark paths, so that argument is module history now. The
 measurement behind the decision (55.1 tok/s without against 38.8 with, lookup
 acceptance 93.2% against dspark's 62.8%) has not been rerun on core, and the
 drafter file is still on disk.
+
+## 9. The LFM3 family: five entries, and what the sweep left unproven
+
+Committed 2026-11-27 as 65143cf. The gufo-org/lfm3-gufo-extension (0.6.2,
+revision a2135d8a5c134dd0e131753ce5ac62cf8e6513a3, extension API >= 0.3.20
+against the 0.3.47 binary this image carries) installs the `lfm3`, `lfm3-vl`,
+`lfm3-audio-asr`, `lfm3-audio-tts` and `d1` providers. Five entries, four
+checkpoints under `/var/lib/models/llama/`, all 2B-class - nothing in this
+family carries the big set's flags. One macro per serve shape, because the
+shapes take different flags: `serve llm` takes the family tail (sessions,
+max-pending, reasoning effort, disk cache), `serve asr`/`serve tts` take none
+of it, and `serve decision` takes no sessions at all.
+
+| entry | serves | context | claim (measured peak) |
+|---|---|---|---|
+| `lfm3-1.7b` | text, chat | 4096 | 5500 (5210) |
+| `lfm3-vl-2b` | text, chat, vision sidecar | 16384 | 6500 (6035) |
+| `lfm3-audio-asr` | `/v1/audio/transcriptions` | - | 3500 (3191) |
+| `lfm3-audio-tts` | `/v1/audio/speech` | - | 3500 (3085) |
+| `d1-omni-2b` | `/v1/systemone` decisions | 8192 | 3500 (3403) |
+
+The numbers are the sweep's measurements from the 13:43 window (flash-next
+unloaded, pool verified empty), peak = baseline - trough and rounded up -
+not estimates, and not the settled figure. The text pair was answered in the
+window: a real 46-token reply on the 1.7B (595.8 prefill tok/s, 109.0 decode
+tok/s) and 115 tokens on the VL entry (601.9 prefill, 110.5 decode). The audio
+and decision entries could not be answered in the window: their endpoints are
+not `/v1/chat/completions`, so the sweep's drive leg got 404 and only the
+load legs measured. They were asked directly through the swap just after the
+window closed: `/v1/audio/transcriptions` answered 200 with the fixture WAV's
+reviewed transcript, `/v1/audio/speech` answered 200 with a valid 24 kHz
+16-bit mono WAV (138284 bytes, male voice, seed 42), and `/v1/systemone`
+answered 200 with `refund = yes` (0.948) and `team = billing` (0.978).
+
+No aliases anywhere: each entry pins its install id with `--served-model-name`
+and forwards the same as `useModelName`, because the swap sends that name
+upstream. The audio pair pins the name because the extension would otherwise
+report the same default public name (`lfm3-audio-2b`) for both entries, which
+would leave the two indistinguishable in `/v1/models`.
+
+What is recorded as a choice rather than a measurement, and it says so in the
+file: `evict_cost: 5` on all five (the small floor of the set, not a load cost),
+concurrencyLimit 4 on the text pair and 2 on the audio pair and d1 (the audio
+docs imply 8 concurrent speech requests, but no load test has been run), and
+the audio capability blocks as the only source of their badges - the speech and
+transcription services report nothing to llama-swap for discovery to read.
+
+What is still open:
+
+- `lfm3-vl-2b` claims [text]/[text]. No image request has been made - the VL
+  sidecar is on disk and the text path answers, but the in block would be
+  [text, image] only if an image request succeeds. Open: send a small
+  solid-color PNG through the swap; if it answers correctly, move the in
+  block to [text, image].
+- The text pair carries one 46/115-token smoke reply each, not a workload:
+  no throughput at a length that means anything. The decode figures are
+  one reply each, not a rate over a workload.
+- The audio and decision rows carry a load measurement, not a followed
+  request, inside the window. The direct requests went out afterwards, so the
+  followed answer is one request each rather than a sequence - the entry
+  comments record what each was asked and what it answered.
+
+Nothing else is blocked by this family: the two text entries claim [text]/[text],
+the audio entries claim transcription in/text out and text in/speech out, and
+d1 carries no capabilities block - it is structured decisions through
+`/v1/systemone`, the chat route answers 404 by design.
