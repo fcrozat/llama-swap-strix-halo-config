@@ -119,6 +119,27 @@ macros:
   gufo_ds41_run: >-
     ${gufo_pod} ${gufo_image} ${gufo_serve_llm} --sessions 2
     --max-pending-per-client 4 ${gufo_serve_tail}
+  # The LFM3-family providers serve through different subcommands than the
+  # text set, so one macro per shape rather than one reused: the pod, image
+  # and binding are the family's, the serve verb and its flags are not. Serve
+  # llm (gufo_run) takes --sessions/--max-pending-per-client and the family
+  # tail; serve asr/tts take neither, and serve decision takes no --sessions,
+  # no --max-pending-per-client and no --cache-disk either.
+  gufo_asr_run: >-
+    ${gufo_pod} ${gufo_image} gufo serve --host 0.0.0.0 --port 8080 asr
+  gufo_tts_run: >-
+    ${gufo_pod} ${gufo_image} gufo serve --host 0.0.0.0 --port 8080 tts
+  gufo_decision_run: >-
+    ${gufo_pod} ${gufo_image} gufo serve --host 0.0.0.0 --port 8080 decision
+  # The text shape, too: same pod, image and binding, but NOT the big-model
+  # chain - the family tail (--sessions 4 --max-pending-per-client 4
+  # --max-tokens 32768 --context 131072 --cache-disk /gufo_cache
+  # --reasoning-effort xhigh --preserve-thinking on) is what the 100 GB+ runs
+  # were measured with, not what a 2B-class entry should carry. The extension's
+  # own serve example is sessions 2, a small documented context, speculative
+  # off (unsupported) and the id pinned as the public name.
+  gufo_lfm3_run: >-
+    ${gufo_pod} ${gufo_image} gufo serve --host 0.0.0.0 --port 8080 llm
   # No loom macro: there is no loom entry, and since 0.37.0 no loom package id
   # to point one at either - `gufo model list` calls inkling-2-mini-loom
   # "installed, no loaded extension offers it" there. The Nix-built gufo this
@@ -541,6 +562,162 @@ models:
     # last 72 h. It is still the one that leaves.
     evict_cost: 30
     concurrencyLimit: 4
+
+  # LFM3 family, from the gufo-org/lfm3-gufo-extension (extension 0.6.2:
+  # providers lfm3 (text), lfm3-vl (vision), lfm3-audio-asr / lfm3-audio-tts
+  # (speech) and d1 (decisions), extension API >= 0.3.20 against the image
+  # the set already runs). The four checkpoints live in
+  # /var/lib/models/llama/{lfm3-1.7b,lfm3-vl-2b,lfm3-audio-2b,d1-omni-2b}/,
+  # downloaded by gufo model install and verified by gufo model verify.
+  # The numbers below are the sweep's measurements (peak = baseline - trough,
+  # rounding up). A real reply landed for each of the five: the two text
+  # entries during the window, the audio and decision entries just after it
+  # (their endpoints are not the chat route, so the sweep's drive leg
+  # returned 404; the three load legs measured, and the real requests were
+  # sent just afterwards).
+  # evict_cost is the small floor of the set, not a measurement: these are
+  # 2B-class models and the resident default here is the big-model set.
+
+  lfm3-1.7b:
+    name: LFM3 1.7B Q8_0 (gufo)
+    # The extension declares a public name per provider (first of model_ids
+    # is primary) and defaults it to the install id for audio only - text
+    # serves need the flag. Pin the id as the public name and send the same
+    # through useModelName, which is what the swap forwards upstream.
+    useModelName: lfm3-1.7b
+    cmd: >-
+      ${gufo_lfm3_run}
+      --model /models/lfm3-1.7b/LFM3-1.7B-Q8_0.gguf
+      --context 4096 --sessions 2 --speculative off
+      --served-model-name lfm3-1.7b
+    cmdStop: podman stop ls-lfm3-1.7b
+    checkEndpoint: /ready
+    proxy: http://localhost:${PORT}
+    # 1846241184 bytes of Q8_0 weights (the same backbone file is what
+    # lfm3-vl-2b serves with the vision sidecar). Measured 13:43 inside the
+    # window: baseline 115608, trough 110398, settled 110463, peak 5210 MiB,
+    # with a real chat reply (46 tokens, 595.8 prefill tps / 109.0 decode
+    # tps) sent through the swap. The claim rounds the measured peak up.
+    # Text in/out is claimed on that reply; nothing past it is.
+    capabilities:
+      in: [text]
+      out: [text]
+    capacities: {mem: 5500}
+    evict_cost: 5
+    concurrencyLimit: 4
+
+  lfm3-vl-2b:
+    name: LFM3 VL 2B Q8_0 + BF16 mmproj (gufo)
+    # Same pinning as lfm3-1.7b; no aliases - the id is the one name.
+    useModelName: lfm3-vl-2b
+    cmd: >-
+      ${gufo_lfm3_run}
+      --model /models/lfm3-vl-2b/LFM3-VL-2B-Q8_0.gguf
+      --mmproj /models/lfm3-vl-2b/mmproj-LFM3-VL-2B-BF16.gguf
+      --context 16384 --sessions 2 --speculative off
+      --served-model-name lfm3-vl-2b
+    cmdStop: podman stop ls-lfm3-vl-2b
+    checkEndpoint: /ready
+    proxy: http://localhost:${PORT}
+    # 1846241184 bytes of Q8_0 weights + 378996032 bytes of BF16 vision
+    # sidecar. Measured 13:43 inside the window: baseline 115682, trough
+    # 109647, settled 109752, peak 6035 MiB, with a real chat reply (115
+    # tokens, 601.9 prefill tps / 110.5 decode tps) sent through the swap.
+    # The claim rounds the measured peak up. A text-only reply landed; no
+    # image request has, so [text, image] is NOT claimed - [text] only.
+    capabilities:
+      in: [text]
+      out: [text]
+    capacities: {mem: 6500}
+    evict_cost: 5
+    concurrencyLimit: 4
+
+  # The two audio entries are the same weights served through two different
+  # services (`gufo serve asr` - /v1/audio/transcriptions and /v1/realtime;
+  # `gufo serve tts` - /v1/audio/speech and /v1/audio/voices). The extension
+  # defaults both to the public name lfm3-audio-2b, which is wrong for two
+  # entries, so each passes --served-model-name to keep its own id.
+
+  lfm3-audio-asr:
+    name: LFM3 Audio 2B Q8_0 + BF16 mmproj (gufo, ASR)
+    # Both audio services report the same default public name (lfm3-audio-2b
+    # per the extension), so each entry pins its own id to keep the two
+    # entries distinct in /v1/models and in the request model field.
+    useModelName: lfm3-audio-asr
+    cmd: |
+      ${gufo_asr_run}
+      --model /models/lfm3-audio-2b/LFM3-Audio-2B-Q8_0.gguf
+      --mmproj /models/lfm3-audio-2b/mmproj-LFM3-Audio-2B-BF16.gguf
+      --served-model-name lfm3-audio-asr
+    cmdStop: podman stop ls-lfm3-audio-asr
+    checkEndpoint: /ready
+    proxy: http://localhost:${PORT}
+    # 1846236704 bytes of Q8_0 weights + 570846400 bytes of BF16 audio
+    # sidecar. srv serves /v1/audio/transcriptions plus the realtime WebSocket
+    # endpoint; checkEndpoint is the shared /ready. The load's trough inside
+    # the window was 3191 MiB (base 115689 -> 112498); a real
+    # /v1/audio/transcriptions request through the swap (the fixture WAV,
+    # max_tokens 128) answered 200 with the text of the reviewed transcript.
+    # The claim rounds the measured peak up.
+    capabilities:
+      in: [audio]
+      out: [text]
+    capacities: {mem: 3500}
+    evict_cost: 5
+    concurrencyLimit: 2
+
+  lfm3-audio-tts:
+    name: LFM3 Audio 2B Q8_0 + BF16 mmproj (gufo, TTS)
+    useModelName: lfm3-audio-tts
+    cmd: |
+      ${gufo_tts_run}
+      --model /models/lfm3-audio-2b/LFM3-Audio-2B-Q8_0.gguf
+      --mmproj /models/lfm3-audio-2b/mmproj-LFM3-Audio-2B-BF16.gguf
+      --served-model-name lfm3-audio-tts
+    cmdStop: podman stop ls-lfm3-audio-tts
+    checkEndpoint: /ready
+    proxy: http://localhost:${PORT}
+    # 1846236704 bytes of Q8_0 weights + 570846400 bytes of BF16 audio
+    # sidecar. srv serves /v1/audio/speech; 8 concurrent speech requests are
+    # documented to share decoding steps, but concurrencyLimit is left at 2
+    # pending any load test. The load's trough inside the window was 3085 MiB
+    # (base 115659 -> 112574); a real /v1/audio/speech request through the
+    # swap (male voice, seed 42, 180 new tokens) answered 200 with a valid
+    # 24 kHz 16-bit mono WAV (138284 bytes). The claim rounds the measured
+    # peak up.
+    capabilities:
+      in: [text]
+      out: [audio]
+    capacities: {mem: 3500}
+    evict_cost: 5
+    concurrencyLimit: 2
+
+  # d1-Omni-2B serves the /v1/systemone decision endpoint, not a text chat:
+  # requests are structured questions, packed in sets of 16, and the text
+  # completions route answers 501 by design. No sessions/cache flags: the
+  # decision command takes neither.
+  d1-omni-2b:
+    name: d1-Omni 2B Q8_0 + BF16 mmproj (gufo, decisions)
+    useModelName: d1-omni-2b
+    cmd: |
+      ${gufo_decision_run}
+      --model /models/d1-omni-2b/d1-Omni-2B-Q8_0.gguf
+      --mmproj /models/d1-omni-2b/mmproj-d1-Omni-2B-BF16.gguf
+      --context 8192 --served-model-name d1-omni-2b
+    cmdStop: podman stop ls-d1-omni-2b
+    checkEndpoint: /ready
+    proxy: http://localhost:${PORT}
+    # 1846241184 bytes of Q8_0 weights + 609956896 bytes of BF16 projector.
+    # The extension default is to report d1-omni-2b; no aliases - the id is
+    # the one name clients may send. The load's trough inside the window was
+    # 3403 MiB (base 115683 -> 112280); a real /v1/systemone request through
+    # the swap (refund scenario) answered 200 with refund=yes 0.948 and
+    # team=billing 0.978. The claim rounds the measured peak up. No
+    # capabilities block: the endpoint is structured decisions, not a
+    # text->text contract, and /v1/chat/completions answers 404 by design.
+    capacities: {mem: 3500}
+    evict_cost: 5
+    concurrencyLimit: 2
 
   # The four hipfire claims are full-context worst cases composed from the
   # engine's own load lines (podman logs ls-<id>): planning weights +
