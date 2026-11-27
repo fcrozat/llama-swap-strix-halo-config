@@ -1082,15 +1082,44 @@ set rather than cached file reads, and the reduction is the direction that gets
 two models loaded that do not fit. What a sweep owes this entry is the pair at
 4 sessions over 131072 on a pool verified empty - `./run-mem-sweep.sh` - and if
 it holds near 34000, roughly 7000 of pool comes back, which on this box is
-almost another hipfire row. Until then 49300 is an inherited claim about these
-weights at this context, not a reading of the binary running today.
+almost another hipfire row. Until then the claim is an inherited figure
+about these weights at this context, not a reading of the binary running
+today.
 
-Still open because 0.37.0 reopened it: the DSpark drafter. Its off decision
-rests on which tensor set the 0.1.x module could read, and core's inkling2
-carries its own DSpark paths, so that argument is module history now. The
-measurement behind the decision (55.1 tok/s without against 38.8 with, lookup
-acceptance 93.2% against dspark's 62.8%) has not been rerun on core, and the
-drafter file is still on disk.
+Resolved 2026-11-27: the DSpark drafter is back on, on the 2026-11-23 root
+file. The 2026-11-24 off decision rested on which tensor set the 0.1.x module
+could read, and core's inkling2 carries its own DSpark paths, so that argument
+was module history. What was actually measured on 2026-11-24 was the
+`dspark-Inkling-2-Mini-Q8_0_Old.gguf` tensor set on the ext-API-0.3.42 build -
+not the 2026-11-23 root drafter this entry now attaches, and not the binary
+running today. What core was run for is the engine's own load line, and it
+takes the root file: `speculative=dspark draft_limit=7` at load_completed.
+
+Two findings worth keeping. First, `--draft-tokens` (and `--draft-policy` and
+`--min-draft-tokens`) are deprecated and ignored in gufo 0.37.0 - each model
+sets its draft length. The engine logs `deprecated_option option=--draft-tokens
+action=ignored reason=model_owned` at startup and serves the model's own
+limit, which is 7. Unsloth's depth-of-3 note for the new drafter is an
+expectation the engine does not honor, so the flag is not kept in the cmd: it
+would imply a control that does not exist. Second, the mechanism is now live
+here and is working: across the twenty completions after the swap restart,
+`acceptance_pct` ran 52.0-89.3% (r17 89.3, r18 57.3, r19 59.1, r20 85.4, r21
+63.9, r22 85.7, r23 53.2, r24 82.3, r25 80.8, r26 68.3, r27 59.6, r28 70.5, r29
+63.2, r30 52.0, r31 63.1, r32 68.1, r3 72.1, r4 66.9, r5 72.5, r6 88.0) against
+the ~23 tok/s the same shapes read before the flag was on, with decode
+30.9-64.1 tok/s. The lookup drafter still runs and reports its own
+`lookup_accepted`/`lookup_proposed` (r31: 142/204).
+
+A clean paired sweep - same shape with and without the flag, pool verified
+empty, loopback pin, two loads each - is still owed, because the figures above
+are live-session traffic, not a controlled comparison, and the pre-restart
+~23 tok/s was an engine time-slice comparison rather than a pinned run. That
+is what would settle the off-measurement outright. The claim (50000, up from
+49300, plus the documented ~700 MiB drafter allowance rounded up) is an
+inherited figure plus the documented drafter cost; it is not a re-measurement
+of this build, and the pool error runs safe in the direction that matters -
+an overestimate is pool the router holds back, never a load it permits that
+the box cannot hold.
 
 ## 9. The LFM3 family: five entries, and what the sweep left unproven
 

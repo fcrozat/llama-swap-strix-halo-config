@@ -409,6 +409,30 @@ models:
   # lookup acceptance (a shorter generation, so compare acceptance and rate, not
   # totals). Its vendor's table (copy-heavy x2.23) is therefore not this box;
   # the drafter file stays on disk for the day that changes.
+  # Re-enabled 2026-11-27, on the mainline-layout file the 2026-11-23 upstream
+  # reorganization moved to the root, not the _Old.gguf the off-measurement
+  # used. Two things about it are new and deserve their own sentence. First,
+  # which engine reads it: the 0.1.x extension refused the root drafter at load
+  # ("hyper-parameters differ"), but 0.37.0's built-in inkling2 (extension API
+  # 0.3.47, 684b716, inkling2 0.1.0 under Built extensions) accepts it - the
+  # load line reports `speculative=dspark draft_limit=7`, and it holds. Second,
+  # the depth flag is a dead letter in this build: `--draft-tokens` and its
+  # `--draft-policy`/`--min-draft-tokens` siblings are each documented as
+  # "Deprecated and ignored: each model sets its draft length", and gufo 0.37.0
+  # logs `deprecated_option option=--draft-tokens action=ignored reason=model_owned`
+  # at startup and runs the model's own limit (7). Unsloth's depth-of-3 note for
+  # the new drafter is therefore an expectation, not a setting, and the flag is
+  # not kept in the cmd - it would imply a control that does not exist. What
+  # the engine serves now shows the mechanism working, across the twenty
+  # completions since the restart: acceptance 52.0-89.3% (most in the 63-88
+  # band) and decode 30.9-64.1 tok/s (most in the 35-55 band), against the
+  # ~23 tok/s the same shapes read before the flag was on. The old off-
+  # measurement is for the _Old.gguf on the ext-API-0.3.42 build and is NOT a
+  # measurement of this file set or this binary - it stays as recorded above
+  # and is superseded only in the narrow sense that the box is now running
+  # dspark deliberately, on the newer artifact. A clean paired sweep (pinned,
+  # pool verified empty, same shape with and without the flag) is still owed;
+  # TODO.md §8.
   # Measured 2026-11-22 on the package weights with the same serving flags
   # (projector included):
   # host_available_mib 124441 -> 83577 = 40864 MiB at 4 sessions / 131072
@@ -499,6 +523,7 @@ models:
       ${gufo_run}
       --model ${inkling_dir}/Inkling-2-Mini-UD-Q4_K_XL.gguf
       --mmproj ${inkling_dir}/mmproj-Inkling-2-Mini-Q8_0.gguf
+      --speculative dspark --dspark-model ${inkling_dir}/dspark-Inkling-2-Mini-Q8_0.gguf
       --cache-ram-bytes 8589934592
       --temperature 1.0 --top-p 1.0 --top-k 0 --min-p 0.0
     cmdStop: podman stop ls-gufo-inkling
@@ -549,11 +574,21 @@ models:
     # reading of the binary running today. It stays until a sweep takes it at
     # the same 4 sessions / 131072 on a pool verified empty, and the direction
     # it is wrong in while that is outstanding is the safe one - a stale claim
-    # makes the router stricter than the box, never looser.
+    # makes the router stricter than the box, never looser. 50000 since
+    # 2026-11-27, when the drafter came back on: the inherited 49300 plus the
+    # ~700 MiB the _Old.gguf measurement recorded for the drafter cost (the
+    # 503889952-byte mainline file is the same class of read), rounded up.
+    # NOT a
+    # re-measurement of the drafter on this build: the load line at the last
+    # restart reads host_available_mib 85205 at load_completed, but that
+    # number sits inside the eviction churn that the restart causes and is not
+    # a clean trough. The claim stays safe in the direction that matters -
+    # an overestimate is pool the router holds back, never a load it permits
+    # that the box cannot hold.
     capabilities:
       in: [text, image]
       out: [text]
-    capacities: {mem: 49300}
+    capacities: {mem: 50000}
     # Bring-back is measured, not assumed: 60.6 s on a cold page cache (a load
     # that still had the drafter attached; the 16.4 GiB read dominates) and
     # 17-18 s warm. That is the
